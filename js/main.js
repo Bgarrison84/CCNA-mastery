@@ -467,6 +467,7 @@ function _renderWeakCard() {
   document.getElementById('weak-view-stats')?.addEventListener('click', () => switchView('stats'));
 }
 
+function renderStory() {
   const view = getView();
   view.innerHTML = `
     <div class="max-w-3xl mx-auto">
@@ -1655,6 +1656,23 @@ function renderStats() {
         <div id="heatmap-container" class="overflow-x-auto"></div>
       </div>
 
+      <!-- Save Management -->
+      <div class="bg-gray-900 border border-green-900/40 rounded p-5">
+        <h3 class="text-sm text-green-700 uppercase tracking-widest mb-3">Save Management</h3>
+        <p class="text-xs text-gray-600 mb-4">
+          All progress is stored in your browser. Export a backup before clearing cache or to transfer to another device.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <button id="export-save" class="px-4 py-2 bg-green-900/30 border border-green-700 text-green-400 text-xs rounded hover:bg-green-900/60 transition-colors">
+            &#8595; Export Save
+          </button>
+          <label id="import-save-label" class="px-4 py-2 bg-blue-900/30 border border-blue-700 text-blue-400 text-xs rounded hover:bg-blue-900/60 transition-colors cursor-pointer">
+            &#8593; Import Save
+            <input id="import-save-input" type="file" accept=".json,application/json" class="hidden">
+          </label>
+        </div>
+      </div>
+
       ${totalSessions > 0 ? `
       <div class="text-center flex justify-center gap-6">
         <button id="clear-history" class="text-xs text-gray-700 hover:text-red-400 transition-colors">
@@ -1710,6 +1728,52 @@ function renderStats() {
       store.clearSRS();
       renderStats();
     }
+  });
+
+  // Export save — download game state as .json file
+  document.getElementById('export-save')?.addEventListener('click', () => {
+    const json = store.exportSave();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `ccna-mastery-save-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // Import save — read .json file and restore game state
+  document.getElementById('import-save-input')?.addEventListener('change', e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const container = document.getElementById('toast-container');
+      const showToast = (msg, cls) => {
+        if (!container) return;
+        const el = document.createElement('div');
+        el.className = `px-4 py-2 border rounded shadow-lg text-sm transition-all duration-300 opacity-0 translate-y-2 ${cls}`;
+        el.textContent = msg;
+        container.appendChild(el);
+        requestAnimationFrame(() => el.classList.remove('opacity-0', 'translate-y-2'));
+        setTimeout(() => {
+          el.classList.add('opacity-0', 'translate-y-2');
+          el.addEventListener('transitionend', () => el.remove(), { once: true });
+        }, 3000);
+      };
+      try {
+        store.importSave(ev.target.result);
+        renderStats();
+        showToast('Save imported successfully!', 'bg-green-900 border-green-500 text-green-200');
+      } catch {
+        showToast('Failed to import — invalid save file.', 'bg-red-900 border-red-500 text-red-200');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so the same file can be re-imported if needed
+    e.target.value = '';
   });
 
   document.getElementById('stats-exam-history')?.addEventListener('click', e => {

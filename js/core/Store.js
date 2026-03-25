@@ -456,6 +456,24 @@ export class Store {
     this._persist();
   }
 
+  /** Export the full game state as a JSON string (for file download). */
+  exportSave() {
+    return JSON.stringify(this._state, null, 2);
+  }
+
+  /**
+   * Replace the current game state with a previously exported save.
+   * Merges with DEFAULT_STATE so new fields added in future versions survive.
+   * @param {string} jsonString
+   */
+  importSave(jsonString) {
+    const parsed = JSON.parse(jsonString);
+    this._state = { ...DEFAULT_STATE, ...parsed };
+    this._recalcLevel(false);
+    this._persist();
+    bus.emit('state:changed', this.state);
+  }
+
   /** Full reset — wipes localStorage. */
   reset() {
     localStorage.removeItem(STORAGE_KEY);
