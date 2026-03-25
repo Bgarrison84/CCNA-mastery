@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Source material (study PDFs, VCE dumps, raw parse scripts — not part of the app)
+source material/
+
+# Parse/build scripts (internal tooling, not needed for the hosted app)
+data/*.py
+data/story_template.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp

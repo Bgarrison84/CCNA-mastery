@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CCNA Mastery — Gamified Learning</title>
+
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#00ff41">
+
+  <!-- Tailwind CSS — local copy for offline-first support (see sw.js) -->
+  <script src="./css/tailwind.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'] },
+          colors: {
+            terminal: { green: '#00ff41', amber: '#ffb000', dim: '#003b00' },
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'scan': 'scan 8s linear infinite',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* ── Base Terminal Aesthetic ─────────────────────────────── */
+    :root {
+      --terminal-green: #00ff41;
+      --terminal-dim:   #003b00;
+      --bg-primary:     #0a0a0a;
+      --bg-surface:     #111111;
+      --bg-elevated:    #1a1a1a;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--bg-primary);
+      color: #c8ffc8;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    /* Scanline overlay — subtle CRT effect */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,255,65,0.015) 2px,
+        rgba(0,255,65,0.015) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── Scrollbar ────────────────────────────────────────────── */
+    ::-webkit-scrollbar         { width: 4px; }
+    ::-webkit-scrollbar-track   { background: #111; }
+    ::-webkit-scrollbar-thumb   { background: #2d4a2d; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4a7a4a; }
+
+    /* ── Navigation ──────────────────────────────────────────── */
+    .nav-btn {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 10px 16px;
+      border-left: 2px solid transparent;
+      color: #4a7a4a;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: all 0.15s;
+      background: transparent;
+      cursor: pointer;
+    }
+    .nav-btn:hover {
+      color: #00ff41;
+      border-left-color: #00ff41;
+      background: rgba(0,255,65,0.05);
+    }
+    .nav-active {
+      color: #00ff41 !important;
+      border-left-color: #00ff41 !important;
+      background: rgba(0,255,65,0.08) !important;
+    }
+
+    /* ── XP Bar ──────────────────────────────────────────────── */
+    #hud-xp-bar-track {
+      background: rgba(0,255,65,0.1);
+      border: 1px solid rgba(0,255,65,0.2);
+    }
+    #hud-xp-bar {
+      background: linear-gradient(90deg, #00cc33, #00ff41);
+      box-shadow: 0 0 8px rgba(0,255,65,0.6);
+      transition: width 0.5s ease;
+    }
+
+    /* ── Terminal Cursor blink ───────────────────────────────── */
+    #terminal-input::placeholder { color: #2a4a2a; }
+    #terminal-input { caret-color: #00ff41; }
+
+    /* ── Health Bars ─────────────────────────────────────────── */
+    #player-hp-bar {
+      background: linear-gradient(90deg, #16a34a, #4ade80);
+      box-shadow: 0 0 6px rgba(74,222,128,0.4);
+      transition: width 0.4s ease;
+    }
+    #boss-hp-bar {
+      background: linear-gradient(90deg, #dc2626, #f87171);
+      box-shadow: 0 0 6px rgba(248,113,113,0.4);
+      transition: width 0.4s ease;
+    }
+
+    /* ── Toast Container ─────────────────────────────────────── */
+    #toast-container {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 9998;
+      pointer-events: none;
+    }
+    #toast-container > div {
+      pointer-events: auto;
+      min-width: 200px;
+      max-width: 320px;
+    }
+
+    /* ── Inventory sidebar ───────────────────────────────────── */
+    #sidebar-inventory {
+      scrollbar-width: thin;
+      scrollbar-color: #2d4a2d #111;
+    }
+
+    /* ── App layout fills viewport ───────────────────────────── */
+    html, body { height: 100%; overflow: hidden; }
+    #app-root   { display: flex; height: 100vh; overflow: hidden; }
+    #app-view   { flex: 1; overflow-y: auto; }
+
+    /* ── Glow effects ────────────────────────────────────────── */
+    .glow-green { text-shadow: 0 0 8px rgba(0,255,65,0.8); }
+    .glow-red   { text-shadow: 0 0 8px rgba(255,65,65,0.8); }
+
+    /* ── Lab view full height ────────────────────────────────── */
+    #app-view > div[style*="height"],
+    #app-view .flex.h-full {
+      height: 100%;
+    }
+
+    /* ── Mobile layout ───────────────────────────────────────── */
+    @media (max-width: 767px) {
+      /* Hide sidebar; content fills full width */
+      #app-sidebar { display: none; }
+      /* Reserve space for bottom nav */
+      #app-view    { padding-bottom: 56px; }
+      /* Bottom nav visible */
+      #bottom-nav  { display: flex; }
+      /* Ensure lab view doesn't break on narrow screens */
+      #app-view .flex.h-full { flex-direction: column; height: auto; min-height: 100%; }
+      #app-view .flex.h-full > .w-64 { width: 100%; max-height: 160px; overflow-y: auto; flex-shrink: 0; }
+      /* 44px min tap targets on quiz/exam option buttons */
+      .quiz-option, .exam-option { min-height: 44px !important; }
+      /* Nav buttons: already ~40px; nudge to 44px */
+      .nav-btn { min-height: 44px; }
+    }
+
+    /* Bottom nav — hidden on desktop */
+    #bottom-nav {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 56px;
+      background: #0d0d0d;
+      border-top: 1px solid rgba(0,255,65,0.2);
+      z-index: 100;
+      align-items: stretch;
+    }
+    .bottom-nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      background: transparent;
+      border: none;
+      color: #4a7a4a;
+      font-size: 9px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s;
+      padding: 4px 2px;
+    }
+    .bottom-nav-btn:hover   { color: #00ff41; background: rgba(0,255,65,0.05); }
+    .bottom-nav-btn.nav-active { color: #00ff41 !important; background: rgba(0,255,65,0.08) !important; }
+    .bottom-nav-btn span.icon { font-size: 18px; line-height: 1; }
+
+    /* Drag sort items — prevent text select during drag */
+    .drag-item { user-select: none; -webkit-user-select: none; }
+  </style>
+</head>
+
+<body class="bg-[#0a0a0a] text-green-300">
+
+<!-- ── Root Layout ──────────────────────────────────────────────────────────── -->
+<div id="app-root">
+
+  <!-- ── Sidebar ────────────────────────────────────────────────────────────── -->
+  <aside id="app-sidebar" class="w-56 shrink-0 flex flex-col bg-[#0d0d0d] border-r border-green-900/40">
+
+    <!-- Logo -->
+    <div class="px-4 py-5 border-b border-green-900/40">
+      <div class="text-green-400 font-bold text-base tracking-widest glow-green">CCNA</div>
+      <div class="text-green-600 text-xs tracking-widest">MASTERY v1.0</div>
+      <div class="mt-2 text-[10px] text-green-900 font-mono">OFFLINE · NO BACKEND</div>
+    </div>
+
+    <!-- Player HUD -->
+    <div class="px-4 py-3 border-b border-green-900/40 space-y-2">
+      <div class="flex items-center justify-between">
+        <span id="hud-player-name" class="text-green-300 text-xs font-semibold truncate">Network Cadet</span>
+        <span id="hud-level" class="text-yellow-400 text-xs font-bold border border-yellow-700 rounded px-1.5 py-0.5">LVL 1</span>
+      </div>
+      <!-- XP Bar -->
+      <div id="hud-xp-bar-track" class="w-full rounded-full h-1.5 overflow-hidden">
+        <div id="hud-xp-bar" class="h-full rounded-full" style="width:0%" aria-valuenow="0" role="progressbar"></div>
+      </div>
+      <div id="hud-xp-text" class="text-[10px] text-green-700">0 XP</div>
+      <div class="flex items-center justify-between text-[10px]">
+        <span id="hud-week" class="text-cyan-600">Week 1</span>
+        <span class="text-yellow-600">&#9670; <span id="hud-hints">3</span> hints</span>
+      </div>
+      <div class="flex items-center justify-between text-[10px]">
+        <span id="hud-streak" class="text-orange-500">&#128293; <span id="hud-streak-count">0</span> day streak</span>
+        <span id="hud-multiplier" class="hidden text-yellow-400 font-bold">x<span id="hud-mult-val">1</span></span>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 py-2">
+      <button data-nav="story"     class="nav-btn">
+        <span>&#128218;</span> Story Mode
+      </button>
+      <button data-nav="lab"       class="nav-btn">
+        <span>&#128187;</span> The Lab
+      </button>
+      <button data-nav="grind"     class="nav-btn">
+        <span>&#128260;</span> The Grind
+      </button>
+      <button data-nav="exam"      class="nav-btn">
+        <span>&#128196;</span> Exam Sim
+      </button>
+      <button data-nav="stats"     class="nav-btn">
+        <span>&#128202;</span> Stats
+      </button>
+      <button data-nav="boss"      class="nav-btn">
+        <span>&#128128;</span> Boss Battles
+      </button>
+      <button data-nav="subnet"    class="nav-btn">
+        <span>&#127760;</span> Subnetting
+      </button>
+      <button data-nav="flash"     class="nav-btn">
+        <span>&#9889;</span> Flashcards
+      </button>
+      <button data-nav="reference" class="nav-btn">
+        <span>&#128218;</span> Reference
+      </button>
+      <button data-nav="notebook"  class="nav-btn">
+        <span>&#128214;</span> Notebook
+      </button>
+      <button data-nav="inventory" class="nav-btn">
+        <span>&#127775;</span> Inventory
+      </button>
+    </nav>
+
+    <!-- Sidebar Inventory (compact) -->
+    <div class="px-4 py-3 border-t border-green-900/40 max-h-40 overflow-y-auto" id="sidebar-inventory">
+      <div class="text-[10px] text-green-900 uppercase tracking-widest mb-1">Items</div>
+      <ul id="inventory-list" class="space-y-0.5 text-xs">
+        <li class="text-gray-700 italic">No items yet.</li>
+      </ul>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ────────────────────────────────────────────────────────── -->
+  <main class="flex flex-col flex-1 overflow-hidden">
+
+    <!-- Top bar -->
+    <header class="shrink-0 flex items-center justify-between px-4 py-2 border-b border-green-900/40 bg-[#0d0d0d]">
+      <div class="flex items-center gap-2 text-xs text-green-700">
+        <span class="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse"></span>
+        <span>SYSTEM ONLINE</span>
+        <span class="text-green-900">·</span>
+        <span id="current-view-label" class="text-green-600">Story Mode</span>
+      </div>
+      <div class="flex items-center gap-3 text-xs text-green-800">
+        <span>Cisco IOS 15.2 (sim)</span>
+        <span class="text-green-900">|</span>
+        <span id="clock" class="text-green-700 font-mono"></span>
+      </div>
+    </header>
+
+    <!-- Dynamic view area -->
+    <div id="app-view" class="flex-1 overflow-y-auto bg-[#0a0a0a]"></div>
+  </main>
+</div>
+
+<!-- ── Bottom Navigation (mobile only) ───────────────────────────────────────── -->
+<nav id="bottom-nav">
+  <button class="bottom-nav-btn" data-nav="story">
+    <span class="icon">&#127968;</span>
+    <span>Home</span>
+  </button>
+  <button class="bottom-nav-btn" data-nav="grind">
+    <span class="icon">&#128260;</span>
+    <span>Grind</span>
+  </button>
+  <button class="bottom-nav-btn" data-nav="lab">
+    <span class="icon">&#128187;</span>
+    <span>Labs</span>
+  </button>
+  <button class="bottom-nav-btn" data-nav="flash">
+    <span class="icon">&#9889;</span>
+    <span>Flash</span>
+  </button>
+  <button class="bottom-nav-btn" data-nav="stats">
+    <span class="icon">&#128202;</span>
+    <span>Stats</span>
+  </button>
+</nav>
+
+<!-- ── Toast Notification Container ─────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<!-- ── Clock script (pure inline, no module needed) ─────────────────────────── -->
+<script>
+  function updateClock() {
+    const el = document.getElementById('clock');
+    if (el) el.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+</script>
+
+<!-- ── Update current view label ─────────────────────────────────────────────── -->
+<script>
+  const VIEW_LABELS = {
+    story: 'Story Mode', lab: 'The Lab', grind: 'The Grind',
+    exam: 'Exam Simulator', stats: 'Stats Dashboard',
+    boss: 'Boss Battles', subnet: 'Subnetting Trainer',
+    notebook: 'Mistake Notebook', inventory: 'Inventory',
+  };
+  // Intercept nav clicks to update header label
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-nav]');
+    if (btn) {
+      const lbl = document.getElementById('current-view-label');
+      if (lbl) lbl.textContent = VIEW_LABELS[btn.dataset.nav] || btn.dataset.nav;
+    }
+  });
+</script>
+
+<!-- ── App Entry Point (ES Module) ──────────────────────────────────────────── -->
+<script type="module" src="./js/main.js"></script>
+
+<!-- ── Service Worker Registration ──────────────────────────────────────────── -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => {
+          // Notify main.js when a new service worker is waiting
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker?.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('[SW] Update available — reload to apply.');
+              }
+            });
+          });
+        })
+        .catch(err => console.warn('[SW] Registration failed:', err));
+    });
+  }
+</script>
+
+</body>
+</html>
