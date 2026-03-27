@@ -49,6 +49,8 @@ const DEFAULT_STATE = {
   visitedViews: [],        // views the user has opened at least once (for tip banners)
   dailyChallengeLog: {},   // { 'YYYY-MM-DD': { questionId, completed, xpAwarded } }
   completedProjects: {},   // { [projectId]: { completedPhases: [], xpEarned, startedAt, completedAt } }
+  megaLabProgress: {},     // { [labId]: { completedPhases: [], xpEarned, hintsUsed, startedAt, completedAt } }
+  badges: [],              // [{ id, name, icon, description, awardedAt }]
   lastSaved: null,
 };
 
@@ -409,6 +411,60 @@ export class Store {
     const prog = this.getProjectProgress(id);
     return prog ? prog.completedPhases.length >= totalPhases : false;
   }
+
+  // ─── Mega Labs ───────────────────────────────────────────────────────────────
+
+  getMegaLabProgress(id) {
+    if (!this._state.megaLabProgress) this._state.megaLabProgress = {};
+    return this._state.megaLabProgress[id] || null;
+  }
+
+  recordMegaLabPhase(id, phaseIdx, xp = 0) {
+    if (!this._state.megaLabProgress) this._state.megaLabProgress = {};
+    const prog = this._state.megaLabProgress[id] || { completedPhases: [], xpEarned: 0, hintsUsed: 0, startedAt: Date.now(), completedAt: null };
+    if (!prog.completedPhases.includes(phaseIdx)) {
+      prog.completedPhases.push(phaseIdx);
+      prog.xpEarned = (prog.xpEarned || 0) + xp;
+      if (xp > 0) this.addXP(xp, `megalab_phase:${id}:${phaseIdx}`);
+    }
+    this._state.megaLabProgress[id] = prog;
+    this._persist();
+  }
+
+  recordMegaLabHint(id) {
+    if (!this._state.megaLabProgress) this._state.megaLabProgress = {};
+    const prog = this._state.megaLabProgress[id];
+    if (prog) { prog.hintsUsed = (prog.hintsUsed || 0) + 1; this._persist(); }
+    // Penalty: spend 30 XP
+    this.spendXP(30);
+  }
+
+  completeMegaLab(id, badge) {
+    if (!this._state.megaLabProgress) this._state.megaLabProgress = {};
+    if (this._state.megaLabProgress[id]) {
+      this._state.megaLabProgress[id].completedAt = Date.now();
+      this._persist();
+    }
+    if (badge) this.awardBadge(badge.id, badge.name, badge.icon, badge.description);
+  }
+
+  isMegaLabComplete(id, totalPhases) {
+    const prog = this.getMegaLabProgress(id);
+    return prog ? prog.completedPhases.length >= totalPhases : false;
+  }
+
+  // ─── Badges ─────────────────────────────────────────────────────────────────
+
+  awardBadge(id, name, icon, description) {
+    if (!this._state.badges) this._state.badges = [];
+    if (!this._state.badges.find(b => b.id === id)) {
+      this._state.badges.push({ id, name, icon, description, awardedAt: Date.now() });
+      this._persist();
+      bus.emit('badge:awarded', { id, name, icon });
+    }
+  }
+
+  get badges() { return this._state.badges || []; }
 
   /** Use a hint (free stock first, then costs 50 XP). */
   useHint() {

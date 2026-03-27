@@ -1111,6 +1111,7 @@ function switchView(view) {
     case 'notebook':  renderNotebook();  break;
     case 'inventory':renderInventory();break;
     case 'projects':  renderProjects();  break;
+    case 'megalabs':  renderMegaLabs();  break;
     default: break;
   }
 
@@ -5679,6 +5680,738 @@ function _runCliProjectPhase(project, phaseIdx, phase, container) {
       setTimeout(() => _renderProjectDetail(project), 2200);
     }
   });
+}
+
+// ─── Mega Labs ────────────────────────────────────────────────────────────────
+
+const MEGA_LABS = [
+  {
+    id: 'mega_campus',
+    title: 'Enterprise Campus Build',
+    badge: { id: 'campus_architect', name: 'Campus Architect', icon: '🏛️', description: 'Completed the full Enterprise Campus Build Mega Lab' },
+    difficulty: 'hard',
+    xp: 800,
+    minLevel: 5,
+    estimatedMin: 90,
+    description: 'Design and build a multi-layer campus network from scratch: VLANs, STP, inter-VLAN routing, OSPF, DHCP, PAT, and port security.',
+    briefing: 'You are the lead network engineer for a 500-seat corporate campus. Greenfield build — every cable is run, every switch is racked. Get the network operational before Monday.',
+    topology: `
+      <div class="font-mono text-xs text-gray-500 space-y-1 leading-tight">
+        <div class="text-center">        [ISP]</div>
+        <div class="text-center">          |</div>
+        <div class="text-center">       [Router] ← OSPF</div>
+        <div class="text-center">          |</div>
+        <div class="text-center">     [Core-SW] ← SVIs + ip routing</div>
+        <div class="text-center">     /        \\</div>
+        <div class="text-center">[Dist-SW1]  [Dist-SW2]</div>
+        <div class="text-center">   |    \\    /    |</div>
+        <div class="text-center">[Acc1] [Acc2] [Acc3] [Acc4]</div>
+        <div class="text-center text-gray-600 mt-1">VLANs: 10(Staff) 20(Mgmt) 30(Guest)</div>
+      </div>`,
+    phases: [
+      {
+        id: 'p0', type: 'cli', title: 'VLANs + Trunking', xp: 120,
+        hints: ['vlan 10 → name Staff; vlan 20 → name Mgmt; vlan 30 → name Guest', 'interface Gi0/1 → switchport mode trunk', 'Trunks carry all VLANs by default'],
+        targetConfig: {
+          hostname: 'Core-SW',
+          vlans: { '10': { name: 'Staff' }, '20': { name: 'Mgmt' }, '30': { name: 'Guest' } },
+          interfaces: {
+            'GigabitEthernet0/1': { switchportMode: 'trunk' },
+            'GigabitEthernet0/2': { switchportMode: 'trunk' },
+          }
+        }
+      },
+      {
+        id: 'p1', type: 'cli', title: 'STP Root Bridge + PortFast', xp: 120,
+        hints: ['spanning-tree vlan 10,20,30 priority 4096 — lower priority wins root', 'interface Gi0/3 → spanning-tree portfast (access ports only)', 'show spanning-tree to verify root bridge election'],
+        targetConfig: {
+          hostname: 'Core-SW',
+          stp: { vlanPriority: { '10': 4096, '20': 4096, '30': 4096 } },
+          interfaces: { 'GigabitEthernet0/3': { stpPortfast: true } }
+        }
+      },
+      {
+        id: 'p2', type: 'cli', title: 'Inter-VLAN Routing (SVIs)', xp: 160,
+        hints: ['ip routing (global config)', 'interface Vlan10 → ip address 10.10.10.1 255.255.255.0 → no shutdown', 'Repeat for Vlan20 (10.20.20.1/24) and Vlan30 (10.30.30.1/24)'],
+        targetConfig: {
+          hostname: 'Core-SW',
+          ipRouting: true,
+          interfaces: {
+            'Vlan10': { ip: '10.10.10.1', mask: '255.255.255.0', shutdown: false },
+            'Vlan20': { ip: '10.20.20.1', mask: '255.255.255.0', shutdown: false },
+            'Vlan30': { ip: '10.30.30.1', mask: '255.255.255.0', shutdown: false },
+          }
+        }
+      },
+      {
+        id: 'p3', type: 'cli', title: 'OSPF to WAN Router', xp: 160,
+        hints: ['router ospf 1 → router-id 2.2.2.2', 'network 10.10.10.0 0.0.0.255 area 0 (repeat for all SVIs)', 'network for uplink to router in area 0', 'passive-interface Vlan10, Vlan20, Vlan30'],
+        targetConfig: {
+          hostname: 'Core-SW',
+          ospf: {
+            processId: 1, routerId: '2.2.2.2',
+            networks: [
+              { network: '10.10.10.0', wildcard: '0.0.0.255', area: 0 },
+              { network: '10.20.20.0', wildcard: '0.0.0.255', area: 0 },
+              { network: '10.30.30.0', wildcard: '0.0.0.255', area: 0 },
+            ],
+            passive: ['Vlan10', 'Vlan20', 'Vlan30']
+          }
+        }
+      },
+      {
+        id: 'p4', type: 'cli', title: 'PAT + ACL (Block Guest → Mgmt)', xp: 140,
+        hints: ['access-list 1 permit 10.10.10.0 0.0.0.255 (Staff)', 'ip nat inside source list 1 interface Gi0/0 overload', 'access-list 110 deny ip 10.30.30.0 0.0.0.255 10.20.20.0 0.0.0.255 → permit ip any any', 'Apply ACL 110 inbound on Vlan30'],
+        targetConfig: {
+          hostname: 'Core-SW',
+          acls: {
+            '1': [{ action: 'permit', source: '10.10.10.0', wildcard: '0.0.0.255' }],
+            '110': [
+              { action: 'deny', protocol: 'ip', source: '10.30.30.0', srcWildcard: '0.0.0.255', dest: '10.20.20.0', destWildcard: '0.0.0.255' },
+              { action: 'permit', protocol: 'ip', source: 'any', dest: 'any' }
+            ]
+          }
+        }
+      },
+      {
+        id: 'p5', type: 'quiz', title: 'Campus Architecture Validation', xp: 100,
+        questions: [
+          { q: 'In the campus hierarchy, which layer runs STP and acts as the gateway for VLANs?', opts: ['Access layer', 'Distribution layer', 'Core layer', 'WAN layer'], ans: 2, exp: 'In a 3-tier model: Access = end devices + port security. Distribution = policy enforcement (ACLs, QoS). Core = high-speed backbone. In a collapsed-core (2-tier), the core/distribution functions merge into one switch.' },
+          { q: 'Why should PortFast ONLY be enabled on access ports connected to end devices?', opts: ['PortFast improves speed for trunk ports', 'PortFast skips Listening/Learning states — if enabled on a trunk, it could cause bridging loops by connecting to another switch', 'PortFast is required for VLAN assignment to work', 'PortFast disables BPDU Guard on the port'], ans: 1, exp: 'PortFast immediately moves the port to Forwarding, skipping the 30s Listening+Learning delay. On trunk/switch ports this is dangerous — a topology loop would form before STP converges. Always pair PortFast with BPDU Guard.' },
+          { q: 'OSPF passive-interface on VLAN SVIs is best practice because:', opts: ['It prevents OSPF from routing between VLANs', 'It stops OSPF hellos on end-user VLANs (no neighbours possible there) while still advertising the network', 'It removes the SVI from the OSPF routing table', 'It required for PAT to work on SVI interfaces'], ans: 1, exp: 'End-user VLANs will never form OSPF neighbours, so sending hellos every 10s is wasteful and allows attackers to inject OSPF routes from client devices. Passive-interface prevents hello transmission while keeping the route advertised.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'mega_branch_dr',
+    title: 'Branch Office Disaster Recovery',
+    badge: { id: 'resilience_engineer', name: 'Resilience Engineer', icon: '🔄', description: 'Completed the Branch Office Disaster Recovery Mega Lab' },
+    difficulty: 'hard',
+    xp: 700,
+    minLevel: 5,
+    estimatedMin: 75,
+    description: 'Build a resilient branch WAN with OSPF, HSRP for gateway redundancy, and a floating static route as failover backup.',
+    briefing: 'The branch office lost connectivity last month because the single router had no redundancy. Design a fault-tolerant architecture using dual routers, HSRP, and a floating static backup route.',
+    topology: `
+      <div class="font-mono text-xs text-gray-500 space-y-1 leading-tight">
+        <div class="text-center">      [HQ Network 10.0.0.0/24]</div>
+        <div class="text-center">               |</div>
+        <div class="text-center">    [HQ-R1]——[HQ-R2] ← HSRP VIP 10.0.0.254</div>
+        <div class="text-center">       |          |</div>
+        <div class="text-center">    Primary    Standby</div>
+        <div class="text-center">       \\        /</div>
+        <div class="text-center">       [OSPF Area 0]</div>
+        <div class="text-center">             |</div>
+        <div class="text-center">       [Branch-R1]</div>
+        <div class="text-center">             |</div>
+        <div class="text-center">    [Branch LAN 192.168.1.0/24]</div>
+      </div>`,
+    phases: [
+      {
+        id: 'p0', type: 'cli', title: 'Interface Configuration (HQ Router)', xp: 120,
+        hints: ['hostname HQ-R1', 'interface Gi0/0 → ip address 10.0.0.1/24 (LAN)', 'interface Gi0/1 → ip address 172.16.1.1/30 (WAN link to Branch)', 'no shutdown on both'],
+        targetConfig: {
+          hostname: 'HQ-R1',
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '10.0.0.1', mask: '255.255.255.0', shutdown: false },
+            'GigabitEthernet0/1': { ip: '172.16.1.1', mask: '255.255.255.252', shutdown: false }
+          }
+        }
+      },
+      {
+        id: 'p1', type: 'cli', title: 'OSPF Area 0', xp: 160,
+        hints: ['router ospf 1 → router-id 1.1.1.1', 'network 10.0.0.0 0.0.0.255 area 0', 'network 172.16.1.0 0.0.0.3 area 0', 'passive-interface GigabitEthernet0/0'],
+        targetConfig: {
+          hostname: 'HQ-R1',
+          ospf: {
+            processId: 1, routerId: '1.1.1.1',
+            networks: [
+              { network: '10.0.0.0', wildcard: '0.0.0.255', area: 0 },
+              { network: '172.16.1.0', wildcard: '0.0.0.3', area: 0 }
+            ],
+            passive: ['GigabitEthernet0/0']
+          }
+        }
+      },
+      {
+        id: 'p2', type: 'cli', title: 'HSRP Gateway Redundancy', xp: 180,
+        hints: ['interface Gi0/0 (LAN interface)', 'standby 1 ip 10.0.0.254 (virtual IP)', 'standby 1 priority 110 (higher = active)', 'standby 1 preempt (reclaim active role on recovery)'],
+        targetConfig: {
+          hostname: 'HQ-R1',
+          interfaces: {
+            'GigabitEthernet0/0': {
+              hsrp: { group: 1, virtualIp: '10.0.0.254', priority: 110, preempt: true }
+            }
+          }
+        }
+      },
+      {
+        id: 'p3', type: 'cli', title: 'Floating Static Route Backup', xp: 140,
+        hints: ['ip route 192.168.1.0 255.255.255.0 172.16.2.1 200 — AD 200 is higher than OSPF (110), so it only activates when OSPF route is gone', 'Floating static: higher AD = lower preference = used only as fallback'],
+        targetConfig: {
+          hostname: 'HQ-R1',
+          routes: [{ dest: '192.168.1.0', mask: '255.255.255.0', next: '172.16.2.1', ad: 200 }]
+        }
+      },
+      {
+        id: 'p4', type: 'quiz', title: 'Resilience Concepts', xp: 100,
+        questions: [
+          { q: 'What is the default HSRP hello timer and dead timer?', opts: ['1s hello / 3s dead', '3s hello / 10s dead', '10s hello / 30s dead', '5s hello / 15s dead'], ans: 1, exp: 'HSRP default: hello every 3 seconds, dead timer 10 seconds (misses 3 hellos). Timers can be tuned down to sub-second with millisecond timers for faster failover.' },
+          { q: 'A floating static route has AD 200. The same destination is learned via OSPF (AD 110). Which route is installed in the RIB?', opts: ['The floating static (AD 200)', 'The OSPF route (AD 110) — lower AD wins', 'Both are installed (equal cost load-balance)', 'Neither — routing loops prevent installation'], ans: 1, exp: 'Lower Administrative Distance wins. AD 110 (OSPF) < AD 200 (floating static), so OSPF is preferred. The static route only activates if the OSPF route disappears (link failure), making it a true backup.' },
+          { q: 'HSRP is a Cisco-proprietary protocol. Which IETF-standard protocol provides the same function?', opts: ['GLBP', 'VRRP (RFC 5798)', 'CARP', 'IRDP'], ans: 1, exp: 'VRRP (Virtual Router Redundancy Protocol, RFC 5798) is the open-standard equivalent of HSRP. GLBP is also Cisco-proprietary but adds load balancing. VRRP is supported by all major vendors.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'mega_security_audit',
+    title: 'Full Security Hardening Audit',
+    badge: { id: 'security_auditor', name: 'Security Auditor', icon: '🔐', description: 'Completed the Full Security Hardening Audit Mega Lab' },
+    difficulty: 'hard',
+    xp: 750,
+    minLevel: 5,
+    estimatedMin: 80,
+    description: 'Fix 12 deliberate security misconfigurations on a router: weak auth, Telnet, missing AAA, no ZBF, permissive ACLs, and more.',
+    briefing: 'You inherited a router from an engineer who left no documentation. The penetration test found critical findings. Fix everything before the auditors arrive.',
+    topology: `
+      <div class="font-mono text-xs text-gray-500 space-y-1 leading-tight">
+        <div class="text-center">  [Internet / Untrusted]</div>
+        <div class="text-center">         |  Gi0/1 (OUTSIDE zone)</div>
+        <div class="text-center">    [FW-Router] ← Zone-Based Firewall</div>
+        <div class="text-center">         |  Gi0/0 (INSIDE zone)</div>
+        <div class="text-center">  [Internal LAN 10.0.0.0/24]</div>
+        <div class="text-center">         |  Gi0/2 (DMZ zone)</div>
+        <div class="text-center">  [DMZ Servers 172.16.0.0/24]</div>
+        <div class="text-center text-red-700 mt-1">⚠ Start state: Telnet on, no AAA, no ZBF, weak password</div>
+      </div>`,
+    phases: [
+      {
+        id: 'p0', type: 'cli', title: 'Fix Authentication + SSH', xp: 150,
+        hints: ['enable secret AuditPass99 (replaces enable password)', 'username auditor privilege 15 secret Aud1t0r!', 'ip domain-name audit.local → crypto key generate rsa modulus 2048 → ip ssh version 2', 'line vty 0 4 → transport input ssh → exec-timeout 10 0'],
+        targetConfig: {
+          hostname: 'FW-Router',
+          enableSecret: 'AuditPass99',
+          users: { auditor: { privilege: 15, secret: 'Aud1t0r!' } },
+          ssh: { domain: 'audit.local', modulus: 2048, version: 2 },
+          vty: { transport: 'ssh' }
+        }
+      },
+      {
+        id: 'p1', type: 'cli', title: 'Enable AAA + Restrict Management', xp: 150,
+        hints: ['aaa new-model', 'aaa authentication login default local', 'aaa authorization exec default local if-authenticated', 'access-list 10 permit 10.0.0.0 0.0.0.255 → line vty 0 4 → access-class 10 in'],
+        targetConfig: {
+          hostname: 'FW-Router',
+          aaa: { newModel: true, authentication: { login: { default: 'local' } }, authorization: { exec: 'local' } },
+          users: { auditor: { privilege: 15, secret: 'Aud1t0r!' } },
+          acls: { '10': [{ action: 'permit', source: '10.0.0.0', wildcard: '0.0.0.255' }] },
+          vty: { transport: 'ssh', accessClass: '10' }
+        }
+      },
+      {
+        id: 'p2', type: 'cli', title: 'Build Zone-Based Firewall', xp: 200,
+        hints: ['zone security INSIDE; zone security OUTSIDE; zone security DMZ', 'interface Gi0/0 → zone-member security INSIDE', 'interface Gi0/1 → zone-member security OUTSIDE', 'interface Gi0/2 → zone-member security DMZ'],
+        targetConfig: {
+          hostname: 'FW-Router',
+          zones: { INSIDE: true, OUTSIDE: true, DMZ: true },
+          interfaces: {
+            'GigabitEthernet0/0': { zone: 'INSIDE', shutdown: false },
+            'GigabitEthernet0/1': { zone: 'OUTSIDE', shutdown: false },
+            'GigabitEthernet0/2': { zone: 'DMZ', shutdown: false }
+          }
+        }
+      },
+      {
+        id: 'p3', type: 'cli', title: 'ZBF Policy + Perimeter ACL', xp: 150,
+        hints: ['class-map type inspect match-any INSIDE-TRAFFIC → match protocol http → match protocol https → match protocol dns', 'policy-map type inspect INSIDE-POLICY → class type inspect INSIDE-TRAFFIC → inspect', 'zone-pair security IN-TO-OUT source INSIDE destination OUTSIDE → service-policy type inspect INSIDE-POLICY', 'access-list 110 deny ip 10.0.0.0 0.255.255.255 any (block RFC1918 spoofing on WAN) → permit ip any any → ip access-group 110 in on Gi0/1'],
+        targetConfig: {
+          hostname: 'FW-Router',
+          classMaps: { 'INSIDE-TRAFFIC': { type: 'inspect', matchAny: true, protocols: ['http', 'https', 'dns'] } },
+          policyMaps: { 'INSIDE-POLICY': { type: 'inspect', classes: { 'INSIDE-TRAFFIC': 'inspect' } } },
+          zonePairs: { 'IN-TO-OUT': { source: 'INSIDE', destination: 'OUTSIDE', servicePolicy: 'INSIDE-POLICY' } },
+          acls: {
+            '110': [
+              { action: 'deny', protocol: 'ip', source: '10.0.0.0', srcWildcard: '0.255.255.255', dest: 'any' },
+              { action: 'permit', protocol: 'ip', source: 'any', dest: 'any' }
+            ]
+          }
+        }
+      },
+      {
+        id: 'p4', type: 'quiz', title: 'Security Audit Review', xp: 100,
+        questions: [
+          { q: 'In ZBF, traffic between two interfaces in the SAME zone is:', opts: ['Denied by default', 'Permitted by default — intra-zone traffic is implicitly allowed', 'Inspected automatically', 'Requires a zone-pair with a pass action'], ans: 1, exp: 'ZBF permits intra-zone traffic (same zone, different interfaces) by default. Only inter-zone traffic (between different zones) requires an explicit zone-pair with a service-policy.' },
+          { q: 'Blocking RFC 1918 source addresses inbound on the WAN interface prevents which attack?', opts: ['VLAN hopping', 'IP spoofing — attackers sending packets with private source IPs to bypass ACLs that permit internal hosts', 'SYN flood', 'MAC flooding'], ans: 1, exp: 'RFC 1918 addresses (10/8, 172.16/12, 192.168/16) should never arrive inbound from the internet — if they do, it is spoofed traffic. This "anti-spoofing" ACL is a standard perimeter hardening measure.' },
+          { q: 'Why is "aaa authorization exec default local if-authenticated" preferred over just "aaa authorization exec default local"?', opts: ['It provides faster authentication', 'if-authenticated allows access even if the authorisation server is down, preventing lockout', 'It enables per-command authorisation', 'There is no difference'], ans: 1, exp: '"local if-authenticated" means: if the user authenticated successfully (via any method), allow exec access regardless of whether the authorisation lookup succeeds. Prevents lockout when AAA server is unreachable.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'mega_cloud_edge',
+    title: 'Cloud-Edge Integration',
+    badge: { id: 'cloud_edge_architect', name: 'Cloud-Edge Architect', icon: '☁️', description: 'Completed the Cloud-Edge Integration Mega Lab' },
+    difficulty: 'expert',
+    xp: 850,
+    minLevel: 7,
+    estimatedMin: 100,
+    description: 'Connect an on-prem network to a simulated cloud environment: OSPF, NAT/PAT, IPsec VPN stub, IPv6 dual-stack, and automation concepts.',
+    briefing: 'The company is migrating 40% of workloads to a cloud provider. You must ensure seamless connectivity between on-prem (OSPF domain) and cloud (simulated via loopbacks), with internet access via PAT and a VPN for secure cloud traffic.',
+    topology: `
+      <div class="font-mono text-xs text-gray-500 space-y-1 leading-tight">
+        <div class="flex justify-between px-4">
+          <div class="text-center">On-Premises</div>
+          <div class="text-center">Cloud (simulated)</div>
+        </div>
+        <div class="text-center">   [10.0.0.0/24]     [172.31.0.0/16 VPC]</div>
+        <div class="text-center">        |                      |</div>
+        <div class="text-center">   [Edge-Router] ←IPsec VPN→ [Cloud-GW Lo0]</div>
+        <div class="text-center">        |</div>
+        <div class="text-center">   OSPF + NAT/PAT</div>
+        <div class="text-center">        |</div>
+        <div class="text-center">   [Internet 203.0.113.0/30]</div>
+        <div class="text-center text-cyan-700 mt-1">IPv6: 2001:db8::/32 dual-stack</div>
+      </div>`,
+    phases: [
+      {
+        id: 'p0', type: 'cli', title: 'On-Prem Interfaces + OSPF', xp: 150,
+        hints: ['hostname Edge-Router', 'Gi0/0: 10.0.0.1/24 (LAN), Gi0/1: 203.0.113.1/30 (WAN)', 'router ospf 1 → router-id 1.1.1.1 → network 10.0.0.0 0.0.0.255 area 0 → passive-interface Gi0/0'],
+        targetConfig: {
+          hostname: 'Edge-Router',
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '10.0.0.1', mask: '255.255.255.0', shutdown: false },
+            'GigabitEthernet0/1': { ip: '203.0.113.1', mask: '255.255.255.252', shutdown: false }
+          },
+          ospf: { processId: 1, routerId: '1.1.1.1', networks: [{ network: '10.0.0.0', wildcard: '0.0.0.255', area: 0 }], passive: ['GigabitEthernet0/0'] }
+        }
+      },
+      {
+        id: 'p1', type: 'cli', title: 'NAT/PAT for Internet Access', xp: 150,
+        hints: ['access-list 1 permit 10.0.0.0 0.0.0.255', 'ip nat inside on Gi0/0; ip nat outside on Gi0/1', 'ip nat inside source list 1 interface GigabitEthernet0/1 overload'],
+        targetConfig: {
+          hostname: 'Edge-Router',
+          acls: { '1': [{ action: 'permit', source: '10.0.0.0', wildcard: '0.0.0.255' }] },
+          interfaces: { 'GigabitEthernet0/0': { natInside: true }, 'GigabitEthernet0/1': { natOutside: true } },
+          nat: { insideSource: [{ type: 'list', acl: '1', interface: 'GigabitEthernet0/1', overload: true }] }
+        }
+      },
+      {
+        id: 'p2', type: 'cli', title: 'IPv6 Dual-Stack', xp: 175,
+        hints: ['ipv6 unicast-routing', 'interface Gi0/0 → ipv6 address 2001:db8:1::1/64', 'interface Gi0/1 → ipv6 address 2001:db8:2::1/64', 'ipv6 route ::/0 2001:db8:2::254'],
+        targetConfig: {
+          hostname: 'Edge-Router',
+          ipv6Routing: true,
+          interfaces: {
+            'GigabitEthernet0/0': { shutdown: false, ipv6: ['2001:db8:1::1/64'] },
+            'GigabitEthernet0/1': { shutdown: false, ipv6: ['2001:db8:2::1/64'] }
+          },
+          ipv6Routes: [{ dest: '::/0', next: '2001:db8:2::254' }]
+        }
+      },
+      {
+        id: 'p3', type: 'quiz', title: 'Cloud-Edge Architecture Review', xp: 175,
+        questions: [
+          { q: 'In a split-tunnelling VPN design, what traffic goes through the VPN tunnel?', opts: ['All traffic from the client', 'Only corporate/cloud-destined traffic; internet traffic breaks out locally', 'Only internet traffic; corporate traffic stays local', 'VoIP traffic only'], ans: 1, exp: 'Split tunnelling routes specific traffic (e.g., 10.0.0.0/8, cloud VPC CIDR) through the VPN tunnel while internet-bound traffic exits locally. Reduces latency for internet access and reduces VPN bandwidth.' },
+          { q: 'Why is Direct Connect preferred over Site-to-Site VPN for latency-sensitive workloads?', opts: ['Direct Connect is cheaper than VPN', 'Direct Connect provides dedicated private bandwidth with consistent latency, avoiding internet congestion', 'Direct Connect supports IPv6; VPN does not', 'VPN only works with IPv4 subnets'], ans: 1, exp: 'Direct Connect provides a dedicated private physical circuit with guaranteed bandwidth and consistent, low latency. VPN tunnels share public internet paths where latency and packet loss vary — unsuitable for real-time applications.' },
+          { q: 'In Ansible, what determines which managed devices a playbook runs against?', opts: ['The playbook filename', 'The hosts or group specified in the play\'s "hosts:" field, matched against the inventory', 'The username configured in ansible.cfg', 'The module used in the task'], ans: 1, exp: 'The "hosts:" field in a play (e.g., hosts: routers) references a group in the inventory file. Ansible runs the play only against matching hosts. Inventory can be static (hosts file) or dynamic (cloud API).' }
+        ]
+      },
+      {
+        id: 'p4', type: 'quiz', title: 'Final Integration Check', xp: 200,
+        questions: [
+          { q: 'A packet from 10.0.0.50 destined for 8.8.8.8 exits the router NAT\'d. What source IP does the internet see?', opts: ['10.0.0.50', '10.0.0.1 (LAN gateway)', '203.0.113.1 (WAN interface IP — PAT source)', '203.0.113.254'], ans: 2, exp: 'PAT (NAT overload) translates the private source IP to the WAN interface IP (203.0.113.1) with a unique source port. The destination sees the WAN IP, not the private LAN address.' },
+          { q: 'The OSPF passive-interface command is applied to Gi0/0 (LAN). What is the effect?', opts: ['OSPF is completely disabled on Gi0/0', 'OSPF hellos are not sent on Gi0/0, but 10.0.0.0/24 is still advertised into OSPF', 'The LAN is removed from OSPF and not advertised', 'The interface becomes a stub area boundary'], ans: 1, exp: 'passive-interface stops OSPF hello packets on that interface — no neighbours can form. But the directly connected network (10.0.0.0/24) is still included in OSPF advertisements. This is best practice on end-user-facing interfaces.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'mega_isp_core',
+    title: 'ISP Core Simulation',
+    badge: { id: 'isp_architect', name: 'ISP Architect', icon: '🌐', description: 'Completed the ISP Core Simulation Mega Lab' },
+    difficulty: 'expert',
+    xp: 900,
+    minLevel: 8,
+    estimatedMin: 110,
+    description: 'Simulate an ISP core network: OSPF backbone, BGP iBGP/eBGP peering, route filtering, and QoS policy.',
+    briefing: 'You are the backbone engineer at a regional ISP. Two customer edge routers need eBGP sessions to the core; four ISP core routers must run iBGP full mesh with OSPF as the IGP. Route filtering prevents customer routes leaking into the ISP core.',
+    topology: `
+      <div class="font-mono text-xs text-gray-500 space-y-1 leading-tight">
+        <div class="text-center">  [CE-1]      [CE-2]    ← Customer Edge (eBGP)</div>
+        <div class="text-center">    |              |</div>
+        <div class="text-center">  [PE-1]——[P-1]——[PE-2] ← ISP Core (OSPF + iBGP)</div>
+        <div class="text-center">            |</div>
+        <div class="text-center">          [P-2]</div>
+        <div class="text-center text-gray-600 mt-1">AS 65000 (ISP) | AS 65001/65002 (Customers)</div>
+      </div>`,
+    phases: [
+      {
+        id: 'p0', type: 'cli', title: 'OSPF IGP (ISP Core)', xp: 150,
+        hints: ['hostname PE-1; router ospf 1 → router-id 1.1.1.1', 'network 10.0.0.0 0.0.0.255 area 0 (loopback + P2P links)', 'Loopback0: 1.1.1.1/32 → always up, stable router-id'],
+        targetConfig: {
+          hostname: 'PE-1',
+          interfaces: {
+            'Loopback0': { ip: '1.1.1.1', mask: '255.255.255.255', shutdown: false },
+            'GigabitEthernet0/0': { ip: '10.0.12.1', mask: '255.255.255.252', shutdown: false }
+          },
+          ospf: { processId: 1, routerId: '1.1.1.1', networks: [{ network: '10.0.0.0', wildcard: '0.255.255.255', area: 0 }, { network: '1.1.1.1', wildcard: '0.0.0.0', area: 0 }] }
+        }
+      },
+      {
+        id: 'p1', type: 'quiz', title: 'BGP Fundamentals', xp: 150,
+        questions: [
+          { q: 'What distinguishes iBGP from eBGP?', opts: ['iBGP uses UDP; eBGP uses TCP', 'iBGP peers are in the same AS (TTL=255); eBGP peers are in different ASes (TTL=1 by default)', 'iBGP uses port 179; eBGP uses port 179 on a different interface', 'iBGP routes have lower administrative distance than eBGP'], ans: 1, exp: 'iBGP: peers within the same Autonomous System — typically uses loopback addresses with TTL=255 (ebgp-multihop not needed). eBGP: peers in different ASes — adjacent routers, TTL=1 (default). Both use TCP port 179.' },
+          { q: 'Why does iBGP require a full mesh or route reflectors?', opts: ['BGP cannot run on Ethernet interfaces', 'iBGP does not re-advertise routes learned from one iBGP peer to another iBGP peer (split horizon rule)', 'iBGP uses a different AS path format', 'Full mesh is required for OSPF synchronisation'], ans: 1, exp: 'iBGP split horizon: routes learned from an iBGP peer are NOT forwarded to other iBGP peers — prevents routing loops. Without a full mesh, some routers never learn all routes. Route Reflectors (RR) solve this at scale by re-advertising iBGP routes.' },
+          { q: 'Which BGP attribute is used to prevent routing loops in eBGP?', opts: ['LOCAL_PREF', 'MED', 'AS_PATH', 'WEIGHT'], ans: 2, exp: 'AS_PATH lists every AS the route has traversed. If a router receives a route containing its own AS number in the path, it discards the route — preventing loops. This is the primary eBGP loop prevention mechanism.' }
+        ]
+      },
+      {
+        id: 'p2', type: 'quiz', title: 'Route Filtering + Policy', xp: 175,
+        questions: [
+          { q: 'A prefix-list is used to filter BGP routes. Which statement is always true about prefix-lists?', opts: ['Prefix-lists use wildcard masks like ACLs', 'Prefix-lists have an implicit deny all at the end — unmatched prefixes are rejected', 'Prefix-lists only work with iBGP, not eBGP', 'Prefix-lists cannot filter specific prefix lengths'], ans: 1, exp: 'Like ACLs, prefix-lists have an implicit "deny any" at the end. You must explicitly permit all prefixes you want to allow. They support exact-match and range matching with ge/le keywords.' },
+          { q: 'What is the purpose of a route-map in BGP?', opts: ['Enables BGP on a specific interface', 'Matches routes using ACLs or prefix-lists and applies policy actions (set attributes, permit/deny)', 'Defines the BGP update interval', 'Configures BGP authentication'], ans: 1, exp: 'Route-maps are powerful policy tools. They can match routes (using ACLs, prefix-lists, community lists) and then set BGP attributes (LOCAL_PREF, MED, next-hop, community). Applied with neighbor <ip> route-map <name> in|out.' },
+          { q: 'LOCAL_PREF is used to influence which path is preferred for traffic LEAVING the AS. Higher or lower value is preferred?', opts: ['Lower LOCAL_PREF is preferred', 'Higher LOCAL_PREF is preferred', 'LOCAL_PREF only affects inbound traffic', 'LOCAL_PREF has no effect on path selection'], ans: 1, exp: 'Higher LOCAL_PREF wins. Default is 100. Set a higher value (e.g., 200) on the preferred exit path to steer outbound traffic. LOCAL_PREF is only shared within an AS (iBGP); it is stripped before sending to eBGP peers.' }
+        ]
+      },
+      {
+        id: 'p3', type: 'quiz', title: 'QoS + Advanced Routing', xp: 175,
+        questions: [
+          { q: 'In a QoS policy using MQC, what is the correct order of configuration steps?', opts: ['class-map → policy-map → service-policy', 'policy-map → class-map → service-policy', 'service-policy → policy-map → class-map', 'class-map → service-policy → policy-map'], ans: 0, exp: 'MQC (Modular QoS CLI) order: (1) class-map — define what traffic matches (DSCP, protocol, ACL), (2) policy-map — define what action (queue, police, shape, mark), (3) service-policy — apply to interface in or out direction.' },
+          { q: 'DSCP EF (Expedited Forwarding) is used for which traffic class?', opts: ['Best-effort data', 'Video streaming (non-real-time)', 'Real-time voice (VoIP) — lowest latency, lowest jitter queue', 'Network management traffic'], ans: 2, exp: 'DSCP EF (value 46, binary 101110) is assigned to VoIP and real-time interactive traffic. It signals the network to provide low latency, low jitter, and low packet loss — typically served by a priority queue.' },
+          { q: 'BGP uses which mechanism to prefer one path over another when all BGP attributes are equal?', opts: ['Router-ID — highest router-ID wins', 'IGP metric to the BGP next-hop — lowest metric wins', 'BGP weight — highest weight wins (Cisco-specific, local only)', 'MED — lowest MED wins'], ans: 2, exp: 'BGP path selection (simplified): WEIGHT (highest) → LOCAL_PREF (highest) → locally originated → AS_PATH (shortest) → ORIGIN (IGP < EGP < ?) → MED (lowest) → eBGP over iBGP → IGP metric (lowest) → Router-ID (lowest).' }
+        ]
+      },
+      {
+        id: 'p4', type: 'quiz', title: 'ISP Architecture Mastery', xp: 250,
+        questions: [
+          { q: 'What is a BGP Route Reflector and why is it used?', opts: ['A router that reflects BGP routes to the internet', 'A server that stores BGP routing tables for analytics', 'A designated iBGP router that re-advertises routes to iBGP clients, eliminating the need for a full mesh', 'A redundant BGP peer that mirrors the primary peer\'s routes'], ans: 2, exp: 'In a large ISP, a full iBGP mesh requires n(n-1)/2 sessions — unscalable. A Route Reflector (RR) breaks the iBGP split-horizon rule for its clients: it re-advertises routes received from one RR-client to all other RR-clients and non-client iBGP peers.' },
+          { q: 'An ISP wants to prevent a customer\'s AS from being used as a transit path for other networks. Which BGP feature achieves this?', opts: ['AS_PATH prepending', 'Community: no-export', 'Prefix-list filtering inbound from customer', 'LOCAL_PREF set to 0'], ans: 2, exp: 'Filter inbound prefixes from the customer using a prefix-list that only permits their allocated prefix(es) — not any other routes. This prevents them from advertising routes they don\'t own and stops their AS from transiting traffic between other ASes.' },
+          { q: 'Which Cisco IOS command verifies BGP neighbour session state and shows received/sent prefix counts?', opts: ['show ip route bgp', 'show ip bgp summary', 'show bgp neighbors', 'show ip bgp neighbors detail'], ans: 1, exp: 'show ip bgp summary displays all BGP neighbours, their AS, session state (Established/Active/Idle), and the number of prefixes received. This is the first command to check when troubleshooting BGP.' }
+        ]
+      }
+    ]
+  }
+];
+
+function renderMegaLabs() {
+  const view  = getView();
+  const state = store.state;
+  const earnedBadgeIds = new Set((store.badges || []).map(b => b.id));
+
+  view.innerHTML = `
+    <div class="p-4 space-y-4 max-w-5xl mx-auto">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-red-400 font-bold text-sm uppercase tracking-widest">Mega Labs</h2>
+          <p class="text-gray-500 text-xs mt-0.5">Expert-level enterprise scenarios. No guided objectives — figure it out. Hints cost <span class="text-red-400">−30 XP</span>. Completion earns a unique badge.</p>
+        </div>
+        ${store.badges?.length ? `<div class="text-right">
+          <div class="text-xs text-gray-600 mb-1">Badges Earned</div>
+          <div class="flex gap-1 justify-end">${store.badges.map(b => `<span title="${b.name}" class="text-xl">${b.icon}</span>`).join('')}</div>
+        </div>` : ''}
+      </div>
+
+      <div class="grid grid-cols-1 gap-4">
+        ${MEGA_LABS.map(lab => {
+          const prog     = store.getMegaLabProgress(lab.id);
+          const done     = prog?.completedPhases?.length ?? 0;
+          const total    = lab.phases.length;
+          const complete = done >= total;
+          const locked   = state.level < (lab.minLevel || 1);
+          const badge    = earnedBadgeIds.has(lab.badge.id);
+          const diffColor = lab.difficulty === 'expert' ? 'text-purple-400' : 'text-red-400';
+          const glowCls   = complete ? 'border-amber-600 shadow-lg shadow-amber-900/30' : locked ? 'border-gray-800 opacity-50' : 'border-red-900 hover:border-red-700';
+
+          return `
+            <div class="megalab-card rounded border ${glowCls} bg-gray-950 transition-all duration-200" data-lab="${lab.id}">
+              <div class="p-4 flex items-start gap-4">
+                <!-- Left: icon + badge -->
+                <div class="shrink-0 text-center w-16">
+                  <div class="text-4xl mb-1">${badge ? lab.badge.icon : '🔒'}</div>
+                  ${badge ? `<div class="text-amber-400 text-xs font-semibold">${lab.badge.name}</div>` : `<div class="text-gray-700 text-xs">Badge locked</div>`}
+                </div>
+
+                <!-- Centre: info -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-white font-bold text-sm">${lab.title}</span>
+                    <span class="${diffColor} text-xs font-semibold uppercase">${lab.difficulty}</span>
+                    <span class="text-gray-500 text-xs">${lab.xp} XP · ~${lab.estimatedMin} min</span>
+                    ${complete ? '<span class="text-amber-400 text-xs">★ Complete</span>' : ''}
+                    ${locked ? `<span class="text-gray-600 text-xs">🔒 Level ${lab.minLevel} required</span>` : ''}
+                  </div>
+                  <p class="text-gray-500 text-xs mt-1">${lab.description}</p>
+
+                  <!-- Phase progress -->
+                  <div class="mt-2 flex items-center gap-2">
+                    <div class="flex gap-0.5 flex-1">
+                      ${lab.phases.map((ph, i) => {
+                        const phDone = prog?.completedPhases?.includes(i);
+                        return `<div class="flex-1 h-1.5 rounded ${phDone ? (lab.difficulty === 'expert' ? 'bg-purple-500' : 'bg-red-500') : 'bg-gray-800'}"></div>`;
+                      }).join('')}
+                    </div>
+                    <span class="text-gray-600 text-xs shrink-0">${done}/${total} phases</span>
+                  </div>
+                </div>
+
+                <!-- Right: action button -->
+                ${!locked ? `<button class="megalab-start-btn shrink-0 px-3 py-1.5 text-xs rounded border ${complete ? 'border-amber-700 text-amber-400 hover:bg-amber-900/20' : 'border-red-800 text-red-300 hover:bg-red-900/20'} transition-colors" data-lab="${lab.id}">
+                  ${complete ? '★ Replay' : done > 0 ? '▶ Continue' : '▶ Launch'}
+                </button>` : ''}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  view.querySelectorAll('.megalab-start-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lab = MEGA_LABS.find(l => l.id === btn.dataset.lab);
+      if (!lab || state.level < (lab.minLevel || 1)) return;
+      _renderMegaLabDetail(lab);
+    });
+  });
+}
+
+function _renderMegaLabDetail(lab) {
+  const view  = getView();
+  const prog  = store.getMegaLabProgress(lab.id);
+  const completedPhases = prog?.completedPhases || [];
+  const hintsUsed = prog?.hintsUsed || 0;
+
+  let startPhase = 0;
+  for (let i = 0; i < lab.phases.length; i++) {
+    if (!completedPhases.includes(i)) { startPhase = i; break; }
+    if (i === lab.phases.length - 1) startPhase = 0;
+  }
+
+  const diffColor = lab.difficulty === 'expert' ? 'text-purple-400' : 'text-red-400';
+  const badge = (store.badges || []).find(b => b.id === lab.badge.id);
+
+  view.innerHTML = `
+    <div class="p-4 space-y-4 max-w-3xl mx-auto">
+      <!-- Header -->
+      <div class="flex items-center gap-3">
+        <button id="ml-back" class="text-gray-500 hover:text-gray-300 text-xs px-2 py-1 border border-gray-700 rounded">← Back</button>
+        <div class="flex items-center gap-2 flex-1">
+          <span class="text-white font-bold text-sm">${lab.title}</span>
+          <span class="${diffColor} text-xs font-semibold uppercase">${lab.difficulty}</span>
+          <span class="text-gray-500 text-xs">${lab.xp} XP · ~${lab.estimatedMin} min</span>
+        </div>
+        ${badge ? `<div class="text-center shrink-0"><span class="text-2xl">${lab.badge.icon}</span><div class="text-amber-400 text-xs">${lab.badge.name}</div></div>` : `<div class="text-gray-700 text-xs shrink-0">Badge: ${lab.badge.icon} ${lab.badge.name}</div>`}
+      </div>
+
+      <!-- Briefing -->
+      <div class="rounded border border-red-900/50 bg-red-950/20 p-3">
+        <div class="text-red-400 text-xs font-semibold mb-1">🎯 MISSION BRIEFING</div>
+        <p class="text-gray-300 text-xs">${lab.briefing}</p>
+      </div>
+
+      <!-- Topology -->
+      <div class="rounded border border-gray-800 bg-gray-950 p-3">
+        <div class="text-gray-500 text-xs font-semibold mb-2 uppercase tracking-widest">Network Topology</div>
+        ${lab.topology}
+      </div>
+
+      <!-- Stats bar -->
+      <div class="flex gap-4 text-xs text-gray-600">
+        <span>Phases: <span class="text-gray-400">${completedPhases.length}/${lab.phases.length}</span></span>
+        <span>Hints used: <span class="${hintsUsed > 0 ? 'text-red-400' : 'text-gray-400'}">${hintsUsed}</span> <span class="text-gray-700">(each costs 30 XP)</span></span>
+        ${prog?.xpEarned ? `<span>XP earned: <span class="text-green-400">${prog.xpEarned}</span></span>` : ''}
+      </div>
+
+      <!-- Phase stepper -->
+      <div class="space-y-2">
+        <div class="text-gray-600 text-xs uppercase tracking-widest">Phases <span class="text-gray-700 normal-case">(objectives hidden — exam mode)</span></div>
+        ${lab.phases.map((ph, i) => {
+          const done   = completedPhases.includes(i);
+          const isNext = i === startPhase && !completedPhases.includes(i);
+          const locked = !done && !isNext;
+          return `
+            <div class="rounded border ${done ? 'border-green-800 bg-green-950/20' : isNext ? 'border-red-800 bg-red-950/20' : 'border-gray-800'} p-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${done ? 'bg-green-700 text-green-100' : isNext ? 'bg-red-800 text-red-100' : 'bg-gray-800 text-gray-600'}">${done ? '✓' : i+1}</span>
+                  <div>
+                    <div class="text-xs font-semibold ${done ? 'text-green-300' : isNext ? 'text-red-300' : 'text-gray-600'}">${ph.title}</div>
+                    <div class="text-gray-700 text-xs">${ph.type === 'cli' ? '💻 CLI' : '❓ Quiz'} · ${ph.xp} XP</div>
+                  </div>
+                </div>
+                ${!locked ? `<button class="ml-phase-btn text-xs px-3 py-1 rounded border ${done ? 'border-gray-700 text-gray-500 hover:text-gray-300' : 'border-red-700 text-red-300 hover:bg-red-900/30'} transition-colors" data-phase="${i}">
+                  ${done ? 'Redo' : '▶ Start'}
+                </button>` : '<span class="text-gray-800 text-xs">🔒</span>'}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+
+      <!-- Phase workspace -->
+      <div id="ml-workspace" class="space-y-3"></div>
+    </div>`;
+
+  document.getElementById('ml-back')?.addEventListener('click', () => renderMegaLabs());
+
+  view.querySelectorAll('.ml-phase-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const phaseIdx = +btn.dataset.phase;
+      _startMegaPhase(lab, phaseIdx);
+    });
+  });
+}
+
+function _startMegaPhase(lab, phaseIdx) {
+  const phase = lab.phases[phaseIdx];
+  if (!phase) return;
+  const workspace = document.getElementById('ml-workspace');
+  if (!workspace) return;
+  workspace.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  if (phase.type === 'quiz') {
+    _runMegaQuizPhase(lab, phaseIdx, phase, workspace);
+  } else {
+    _runMegaCliPhase(lab, phaseIdx, phase, workspace);
+  }
+}
+
+function _runMegaQuizPhase(lab, phaseIdx, phase, container) {
+  let currentQ = 0;
+  let correct  = 0;
+
+  function showQ() {
+    if (currentQ >= phase.questions.length) {
+      const pass = correct >= Math.ceil(phase.questions.length * 0.67);
+      container.innerHTML = `
+        <div class="rounded border ${pass ? 'border-green-700 bg-green-950/30' : 'border-red-800 bg-red-950/30'} p-4 text-center space-y-2">
+          <div class="text-2xl">${pass ? '✅' : '❌'}</div>
+          <div class="text-sm font-semibold ${pass ? 'text-green-300' : 'text-red-300'}">${pass ? `Phase ${phaseIdx+1} Complete — +${phase.xp} XP` : 'Try Again'}</div>
+          <div class="text-xs text-gray-500">${correct}/${phase.questions.length} correct</div>
+          ${!pass ? `<button id="ml-retry" class="px-3 py-1 text-xs border border-red-700 text-red-300 rounded hover:bg-red-900/30">↺ Retry</button>` : ''}
+        </div>`;
+      if (pass) {
+        store.recordMegaLabPhase(lab.id, phaseIdx, phase.xp);
+        _checkMegaCompletion(lab);
+        setTimeout(() => _renderMegaLabDetail(lab), 1800);
+      }
+      container.querySelector('#ml-retry')?.addEventListener('click', () => { currentQ = 0; correct = 0; showQ(); });
+      return;
+    }
+
+    const q = phase.questions[currentQ];
+    container.innerHTML = `
+      <div class="rounded border border-gray-700 bg-gray-950 p-4 space-y-3">
+        <div class="flex justify-between">
+          <span class="text-red-400 text-xs font-semibold">❓ ${phase.title}</span>
+          <span class="text-gray-600 text-xs">Q${currentQ+1}/${phase.questions.length}</span>
+        </div>
+        <p class="text-white text-sm">${q.q}</p>
+        <div class="space-y-2">
+          ${q.opts.map((o, i) => `<button class="ml-opt w-full text-left px-3 py-2 text-xs rounded border border-gray-700 hover:border-red-700 text-gray-300 transition-colors" data-idx="${i}"><span class="text-gray-600 mr-2">${String.fromCharCode(65+i)}.</span>${o}</button>`).join('')}
+        </div>
+        <div id="ml-fb" class="hidden text-xs p-2 rounded border"></div>
+      </div>`;
+
+    container.querySelectorAll('.ml-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const chosen  = +btn.dataset.idx;
+        const isRight = chosen === q.ans;
+        if (isRight) correct++;
+        const fb = container.querySelector('#ml-fb');
+        fb.classList.remove('hidden');
+        fb.className = `text-xs p-2 rounded border ${isRight ? 'border-green-700 bg-green-950 text-green-300' : 'border-red-800 bg-red-950 text-red-300'}`;
+        fb.textContent = (isRight ? '✓ ' : '✗ ') + q.exp;
+        container.querySelectorAll('.ml-opt').forEach((b, i) => {
+          b.disabled = true;
+          if (i === q.ans) b.classList.add('border-green-600', 'text-green-300');
+          else if (i === chosen && !isRight) b.classList.add('border-red-700', 'text-red-400');
+        });
+        setTimeout(() => { currentQ++; showQ(); }, 2200);
+      });
+    });
+  }
+
+  showQ();
+}
+
+function _runMegaCliPhase(lab, phaseIdx, phase, container) {
+  let mlTerminal = null;
+  let hintIdx    = 0;
+
+  container.innerHTML = `
+    <div class="rounded border border-red-900 overflow-hidden">
+      <div class="flex items-center gap-2 px-3 py-2 bg-gray-900 border-b border-red-900">
+        <div class="flex gap-1.5">
+          <div class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+          <div class="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+          <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+        </div>
+        <span class="text-red-400 text-xs font-mono flex-1">💻 ${phase.title}</span>
+        <span class="text-gray-700 text-xs">Hint costs −30 XP</span>
+        <div class="flex gap-1.5 ml-2">
+          <button id="ml-hint-btn" class="px-2 py-0.5 text-xs bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 rounded">Hint (−30 XP)</button>
+          <button id="ml-validate-btn" class="px-2 py-0.5 text-xs bg-green-950 hover:bg-green-900 border border-green-800 text-green-400 rounded">Validate</button>
+          <button id="ml-reset-btn" class="px-2 py-0.5 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-500 rounded">Reset</button>
+        </div>
+      </div>
+      <div id="ml-term-out" class="h-56 overflow-y-auto p-3 font-mono text-sm leading-relaxed bg-black"></div>
+      <div class="flex items-center px-3 py-2 border-t border-red-900 bg-black">
+        <span id="ml-term-prompt" class="text-yellow-400 font-mono text-sm select-none mr-2">Router> </span>
+        <input id="ml-term-input" type="text" autocomplete="off" spellcheck="false"
+          class="flex-1 bg-transparent text-white font-mono text-sm outline-none caret-red-400"
+          placeholder="type a command...">
+      </div>
+      <div id="ml-val-results" class="hidden px-3 py-2 bg-gray-950 border-t border-gray-800 text-xs font-mono space-y-0.5"></div>
+    </div>`;
+
+  mlTerminal = new Terminal({
+    outputEl: document.getElementById('ml-term-out'),
+    inputEl:  document.getElementById('ml-term-input'),
+    promptEl: document.getElementById('ml-term-prompt'),
+    store,
+  });
+
+  const inp = document.getElementById('ml-term-input');
+  inp.focus();
+  inp.addEventListener('focus', () => setTimeout(() => inp.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300));
+
+  document.getElementById('ml-hint-btn')?.addEventListener('click', () => {
+    if (!phase.hints?.length) return;
+    const hint = phase.hints[Math.min(hintIdx, phase.hints.length - 1)];
+    hintIdx = Math.min(hintIdx + 1, phase.hints.length - 1);
+    store.recordMegaLabHint(lab.id); // costs 30 XP
+    const out = document.getElementById('ml-term-out');
+    if (out) out.innerHTML += `<div class="text-red-400 text-xs mt-1">💡 Hint (−30 XP): ${hint}</div>`;
+  });
+
+  document.getElementById('ml-reset-btn')?.addEventListener('click', () => mlTerminal?.reset());
+
+  document.getElementById('ml-validate-btn')?.addEventListener('click', () => {
+    if (!mlTerminal) return;
+    mlTerminal._targetConfig = phase.targetConfig;
+    mlTerminal._labId = `mega_${lab.id}_${phaseIdx}`;
+    const result = mlTerminal.validate();
+
+    const valDiv = document.getElementById('ml-val-results');
+    valDiv.classList.remove('hidden');
+    valDiv.innerHTML = result.checks.map(c =>
+      `<div class="${c.pass ? 'text-green-400' : 'text-red-400'}">${c.pass ? '✓' : '✗'} ${c.label}</div>`
+    ).join('') + `<div class="mt-1 pt-1 border-t border-gray-800 ${result.pass ? 'text-green-300' : 'text-amber-300'}">${result.pass ? `✅ Phase cleared — +${phase.xp} XP` : `${result.score}% — keep going`}</div>`;
+
+    if (result.pass) {
+      store.recordMegaLabPhase(lab.id, phaseIdx, phase.xp);
+      _checkMegaCompletion(lab);
+      setTimeout(() => _renderMegaLabDetail(lab), 2200);
+    }
+  });
+}
+
+function _checkMegaCompletion(lab) {
+  const prog = store.getMegaLabProgress(lab.id);
+  if (prog && prog.completedPhases.length >= lab.phases.length) {
+    store.completeMegaLab(lab.id, lab.badge);
+    // Bonus XP
+    store.addXP(Math.round(lab.xp * 0.15), `megalab_bonus:${lab.id}`);
+    bus.emit('toast', { msg: `🏆 ${lab.badge.icon} Badge earned: ${lab.badge.name}!`, type: 'success' });
+  }
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

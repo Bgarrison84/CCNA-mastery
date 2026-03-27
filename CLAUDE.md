@@ -322,7 +322,17 @@ Work through pillars in order, one per session. Ask before moving to next pillar
 - [x] Each project: 3 phases (mix of cli + quiz), objectives list, hints, targetConfig; 10% XP completion bonus on finishing all phases
 - [x] Nav button "🔧 Projects" added to sidebar; 'projects' case added to switchView; breadcrumb label added
 
-### Pillar 5 — Mega Labs
+### Pillar 5 — Mega Labs *(done 2026-03-27)*
+- [x] `store.megaLabProgress{}` + `badges[]` added to DEFAULT_STATE; `getMegaLabProgress()`, `recordMegaLabPhase()`, `recordMegaLabHint()` (−30 XP penalty), `completeMegaLab()`, `isMegaLabComplete()`, `awardBadge()`, `get badges()` methods added to Store
+- [x] `renderMegaLabs()` — dramatic card grid with badge showcase, locked/unlocked state (minLevel), per-lab progress bars, difficulty/XP/time badges
+- [x] `_renderMegaLabDetail()` — briefing + inline topology HTML/CSS diagram + stats bar (hints used) + phase stepper; objectives hidden (exam mode)
+- [x] `_runMegaQuizPhase()` — inline MC quiz with 67% pass mark; retry on fail
+- [x] `_runMegaCliPhase()` — inline Terminal instance per phase; Hint btn (−30 XP via `store.recordMegaLabHint()`); Validate/Reset; auto-advances on pass
+- [x] `_checkMegaCompletion()` — awards badge, emits toast, grants 15% XP completion bonus
+- [x] 5 Mega Labs defined (MEGA_LABS constant): Enterprise Campus Build (800XP/L5/90min/🏛️), Branch DR (700XP/L5/75min/🔄), Security Audit (750XP/L5/80min/🔐), Cloud-Edge Integration (850XP/L7/100min/☁️), ISP Core Simulation (900XP/L8/110min/🌐)
+- [x] Each Mega Lab: 4–6 phases (CLI + quiz mix), topology HTML diagram, briefing narrative, badge spec; phase stepper green/amber/grey
+- [x] Nav button "🏭 Mega Labs" added to sidebar; 'megalabs' case added to switchView; breadcrumb label added
+
 Large-scale, multi-concept, multi-phase CLI labs that simulate real enterprise scenarios end-to-end. Unlike Projects (which are guided with hints), Mega Labs are closer to exam simulations — minimal hand-holding, full topology, multiple devices, cross-domain objectives.
 
 **Design principles:**
