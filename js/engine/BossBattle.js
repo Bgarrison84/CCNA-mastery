@@ -37,6 +37,7 @@ export class BossBattle {
     this._timer       = null;
     this._elapsed     = 0;
     this.active       = false;
+    this.phaseStats   = { easy: { correct: 0, total: 0 }, medium: { correct: 0, total: 0 }, hard: { correct: 0, total: 0 } };
     // Sort questions by difficulty: easy → medium → hard (then shuffle within each tier)
     this.questions    = this._sortByDifficulty([...bossData.questions]);
   }
@@ -81,7 +82,11 @@ export class BossBattle {
     const isRight = this._checkAnswer(q, answer);
 
     const prevPhase = this._phase();
+    const diff = q.difficulty || 'medium';
+    if (!this.phaseStats[diff]) this.phaseStats[diff] = { correct: 0, total: 0 };
+    this.phaseStats[diff].total++;
     if (isRight) {
+      this.phaseStats[diff].correct++;
       this.correct++;
       const xpGain    = this._calcXP(q);
       const bossDmg   = Math.floor(100 / this.questions.length);
@@ -165,14 +170,14 @@ export class BossBattle {
       this.store.addXP(bonus, `boss_perfect:${this.bossData.id}`);
     }
     bus.emit('boss:defeated', { bossId: this.bossData.id, score: finalScore, time: this._elapsed, perfectRun });
-    return { correct: true, done: true, victory: true, finalScore, elapsed: this._elapsed, perfectRun };
+    return { correct: true, done: true, victory: true, finalScore, elapsed: this._elapsed, perfectRun, phaseStats: this.phaseStats, correctCount: this.correct, total: this.questions.length };
   }
 
   _defeat() {
     this.stop();
     const finalScore = this._finalScore();
     bus.emit('boss:failed', { bossId: this.bossData.id, score: finalScore });
-    return { correct: false, done: true, victory: false, finalScore, elapsed: this._elapsed };
+    return { correct: false, done: true, victory: false, finalScore, elapsed: this._elapsed, phaseStats: this.phaseStats, correctCount: this.correct, total: this.questions.length };
   }
 
   _finalScore() {

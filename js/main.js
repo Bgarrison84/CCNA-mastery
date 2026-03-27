@@ -16,7 +16,7 @@ import { StoryMode }   from './ui/StoryMode.js';
 import { Terminal }    from './engine/Terminal.js';
 import { BossBattle }  from './engine/BossBattle.js';
 import { QuizEngine }  from './engine/QuizEngine.js';
-import { generateIPv4Problem, validateIPv4, buildChallenge } from './engine/Subnetting.js';
+import { generateIPv4Problem, validateIPv4, buildChallenge, calculateVLSM, solveSubnet } from './engine/Subnetting.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -1439,16 +1439,80 @@ function renderStory() {
   const view = getView();
   view.innerHTML = `
     <div class="max-w-3xl mx-auto">
-      <div id="mission-card" class="px-6 pt-5"></div>
+      <div id="week-timeline" class="px-6 pt-5 pb-1"></div>
+      <div id="mission-card" class="px-6 pb-1"></div>
       <div id="daily-challenge-card" class="px-6 pb-1"></div>
       <div id="weak-card" class="px-6 pb-1"></div>
       <div id="story-container" class="p-6"></div>
     </div>`;
+  _renderWeekTimeline();
   _renderMissionCard();
   _renderDailyChallenge();
   _renderWeakCard();
   story = new StoryMode(content.storyBeats, store, document.getElementById('story-container'));
   story.showCurrentBeat();
+}
+
+function _renderWeekTimeline() {
+  const el = document.getElementById('week-timeline');
+  if (!el) return;
+  const state = store.state;
+  const currentWeek = state.currentWeek;
+  const WEEK_TOPICS = ['Network Fundamentals', 'Network Access', 'IP Connectivity', 'IP Services', 'Security Fundamentals', 'Automation'];
+
+  // Count beats per week and how many are seen
+  const beatsByWeek = {};
+  (content.storyBeats || []).forEach(b => {
+    if (!b.branchOf) {
+      if (!beatsByWeek[b.week]) beatsByWeek[b.week] = { total: 0, seen: 0 };
+      beatsByWeek[b.week].total++;
+      if (state.storyProgress?.[b.id]?.seen) beatsByWeek[b.week].seen++;
+    }
+  });
+
+  const weeks = [1, 2, 3, 4, 5, 6];
+  const nodes = weeks.map(w => {
+    const wb = beatsByWeek[w] || { total: 0, seen: 0 };
+    const done    = wb.total > 0 && wb.seen >= wb.total;
+    const active  = w === currentWeek;
+    const locked  = w > currentWeek;
+    const pct     = wb.total > 0 ? Math.round((wb.seen / wb.total) * 100) : 0;
+    const nodeColor = done ? 'bg-green-700 border-green-500 text-green-200'
+                    : active ? 'bg-amber-800 border-amber-500 text-amber-200'
+                    : locked ? 'bg-gray-800 border-gray-700 text-gray-600'
+                    : 'bg-gray-800 border-gray-600 text-gray-400';
+    const labelColor = done ? 'text-green-400' : active ? 'text-amber-400' : locked ? 'text-gray-700' : 'text-gray-500';
+    return `
+      <div class="flex flex-col items-center gap-1 relative">
+        <div class="w-10 h-10 rounded-full border-2 ${nodeColor} flex items-center justify-center font-bold text-sm transition-colors" title="Week ${w}: ${WEEK_TOPICS[w-1]} — ${wb.seen}/${wb.total} beats">
+          ${done ? '✓' : `W${w}`}
+        </div>
+        ${pct > 0 && !done ? `<div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-10 h-1 bg-gray-800 rounded overflow-hidden"><div class="h-full bg-amber-500 rounded" style="width:${pct}%"></div></div>` : ''}
+        <div class="text-center ${labelColor} text-xs leading-tight max-w-14 mt-1">${WEEK_TOPICS[w-1].split(' ')[0]}</div>
+      </div>`;
+  });
+
+  // Connector lines between nodes
+  const nodesWithConnectors = [];
+  nodes.forEach((node, i) => {
+    nodesWithConnectors.push(node);
+    if (i < nodes.length - 1) {
+      const w = i + 1;
+      const done = (beatsByWeek[w]?.seen || 0) >= (beatsByWeek[w]?.total || 1) && (beatsByWeek[w]?.total || 0) > 0;
+      nodesWithConnectors.push(`<div class="flex-1 h-0.5 ${done ? 'bg-green-700' : w < currentWeek ? 'bg-gray-600' : 'bg-gray-800'} self-center mb-6"></div>`);
+    }
+  });
+
+  el.innerHTML = `
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3">
+      <div class="flex items-center gap-1 mb-1">
+        <span class="text-xs text-gray-500 font-semibold uppercase tracking-wider">6-Week Journey</span>
+        <span class="text-xs text-gray-700 ml-2">Week ${currentWeek} of 6 active</span>
+      </div>
+      <div class="flex items-start pt-2 px-1">
+        ${nodesWithConnectors.join('')}
+      </div>
+    </div>`;
 }
 
 // ─── Lab (CLI Simulator) ──────────────────────────────────────────────────────
@@ -3481,15 +3545,46 @@ function _showBossPhaseBanner(phase) {
 
 function renderBossEnd(result) {
   const view = getView();
+
+  // Phase breakdown bars
+  const phaseOrder = ['easy', 'medium', 'hard'];
+  const phaseColors = { easy: 'bg-green-500', medium: 'bg-yellow-500', hard: 'bg-red-500' };
+  const phaseRows = phaseOrder
+    .filter(p => (result.phaseStats?.[p]?.total || 0) > 0)
+    .map(p => {
+      const { correct = 0, total = 0 } = result.phaseStats?.[p] || {};
+      const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+      return `
+        <div class="flex items-center gap-2 text-xs">
+          <span class="w-14 text-gray-500 capitalize">${p}</span>
+          <div class="flex-1 bg-gray-800 rounded h-2 overflow-hidden">
+            <div class="${phaseColors[p]} h-full rounded" style="width:${pct}%"></div>
+          </div>
+          <span class="w-16 text-right ${pct >= 80 ? 'text-green-400' : pct >= 60 ? 'text-yellow-400' : 'text-red-400'}">${correct}/${total} (${pct}%)</span>
+        </div>`;
+    }).join('');
+
+  // HP bar
+  const hpPct = result.victory ? Math.round((100 - (result.correct / Math.max(result.total, 1)) * 100)) : 0;
+
   view.innerHTML = `
-    <div class="max-w-md mx-auto p-8 text-center">
-      <div class="text-6xl mb-4">${result.victory ? '&#127942;' : '&#128128;'}</div>
-      <h2 class="text-2xl font-bold ${result.victory ? 'text-green-300' : 'text-red-300'} mb-2">
-        ${result.victory ? 'BOSS DEFEATED!' : 'DEFEATED...'}
-      </h2>
-      <p class="text-gray-400 text-sm mb-2">Score: ${result.finalScore}%  ·  Time: ${result.elapsed}s</p>
-      ${result.perfectRun ? '<p class="text-yellow-400 font-bold text-sm mb-1">&#11088; PERFECT RUN! +100 XP Bonus</p>' : ''}
-      <div class="flex justify-center gap-3 mt-6">
+    <div class="max-w-md mx-auto p-8 space-y-5">
+      <div class="text-center">
+        <div class="text-6xl mb-3">${result.victory ? '&#127942;' : '&#128128;'}</div>
+        <h2 class="text-2xl font-bold ${result.victory ? 'text-green-300' : 'text-red-300'} mb-1">
+          ${result.victory ? 'BOSS DEFEATED!' : 'DEFEATED...'}
+        </h2>
+        <p class="text-gray-400 text-sm">Score: <span class="font-bold text-white">${result.finalScore}%</span>  ·  Time: <span class="font-mono">${result.elapsed}s</span>  ·  <span class="${result.victory ? 'text-green-400' : 'text-red-400'}">${result.correctCount ?? '?'}/${result.total ?? '?'} correct</span></p>
+        ${result.perfectRun ? '<p class="text-yellow-400 font-bold text-sm mt-1">&#11088; PERFECT RUN! +100 XP Bonus</p>' : ''}
+      </div>
+
+      ${phaseRows ? `
+      <div class="bg-gray-900 border border-gray-700 rounded p-4 space-y-2">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Phase Breakdown</div>
+        ${phaseRows}
+      </div>` : ''}
+
+      <div class="flex justify-center gap-3">
         <button onclick="window.switchView?.('boss')" class="px-5 py-2 bg-red-900 hover:bg-red-800 border border-red-700 text-red-200 rounded text-sm">Try Again</button>
         <button onclick="window.switchView?.('grind')" class="px-5 py-2 bg-green-800 hover:bg-green-700 text-green-200 rounded text-sm">Back to Grind</button>
       </div>
@@ -3504,7 +3599,15 @@ function renderSubnet() {
     <div class="max-w-2xl mx-auto p-6 space-y-5">
       <div class="flex items-center justify-between">
         <h2 class="text-cyan-400 font-bold text-xl">Subnetting Trainer</h2>
-        <div class="flex gap-2">
+        <div class="flex gap-1 border border-gray-700 rounded overflow-hidden">
+          <button id="tab-basic" class="subnet-tab px-3 py-1 text-xs bg-cyan-800 text-cyan-200 font-semibold" data-tab="basic">Basic</button>
+          <button id="tab-vlsm"  class="subnet-tab px-3 py-1 text-xs bg-gray-800 text-gray-400 hover:bg-gray-700" data-tab="vlsm">VLSM</button>
+        </div>
+      </div>
+
+      <!-- Basic mode -->
+      <div id="subnet-basic-panel">
+        <div class="flex items-center justify-between mb-4">
           <select id="subnet-diff" class="bg-gray-800 border border-gray-600 text-gray-300 rounded px-2 py-1 text-xs">
             <option value="easy">Easy (/24–/28)</option>
             <option value="medium" selected>Medium (/19–/28)</option>
@@ -3512,16 +3615,158 @@ function renderSubnet() {
           </select>
           <button id="new-problem" class="px-4 py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-sm font-semibold">New Problem</button>
         </div>
+        <div id="subnet-problem" class="bg-gray-900 border border-gray-700 rounded p-5 font-mono">
+          <p class="text-gray-500 text-sm text-center">Press "New Problem" to begin.</p>
+        </div>
+        <div id="subnet-results" class="hidden space-y-1 text-sm font-mono mt-3"></div>
       </div>
 
-      <div id="subnet-problem" class="bg-gray-900 border border-gray-700 rounded p-5 font-mono">
-        <p class="text-gray-500 text-sm text-center">Press "New Problem" to begin.</p>
+      <!-- VLSM mode -->
+      <div id="subnet-vlsm-panel" class="hidden space-y-4">
+        <div class="bg-gray-900 border border-gray-700 rounded p-4 text-xs text-gray-400 space-y-1">
+          <p><span class="text-cyan-300 font-semibold">VLSM Challenge:</span> Given a base network, allocate subnets to meet each department's host requirements. Subnets are allocated largest-first.</p>
+          <p class="text-gray-600">Enter the Network Address and CIDR for each subnet.</p>
+        </div>
+        <div class="flex justify-end">
+          <button id="vlsm-new" class="px-4 py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-sm font-semibold">New Challenge</button>
+        </div>
+        <div id="vlsm-problem" class="bg-gray-900 border border-gray-700 rounded p-5 font-mono">
+          <p class="text-gray-500 text-sm text-center">Press "New Challenge" to begin.</p>
+        </div>
       </div>
-
-      <div id="subnet-results" class="hidden space-y-1 text-sm font-mono"></div>
     </div>`;
 
+  // Tab switching
+  document.querySelectorAll('.subnet-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.subnet-tab').forEach(b => {
+        b.className = 'subnet-tab px-3 py-1 text-xs bg-gray-800 text-gray-400 hover:bg-gray-700';
+      });
+      btn.className = 'subnet-tab px-3 py-1 text-xs bg-cyan-800 text-cyan-200 font-semibold';
+      const isVlsm = btn.dataset.tab === 'vlsm';
+      document.getElementById('subnet-basic-panel').classList.toggle('hidden', isVlsm);
+      document.getElementById('subnet-vlsm-panel').classList.toggle('hidden', !isVlsm);
+    });
+  });
+
   document.getElementById('new-problem')?.addEventListener('click', generateSubnetProblem);
+  document.getElementById('vlsm-new')?.addEventListener('click', generateVLSMChallenge);
+}
+
+function generateVLSMChallenge() {
+  const panel = document.getElementById('vlsm-problem');
+  if (!panel) return;
+
+  // Random /24 base network
+  const oct1 = [10, 172, 192][Math.floor(Math.random() * 3)];
+  const oct2 = Math.floor(Math.random() * 254) + 1;
+  const oct3 = Math.floor(Math.random() * 254) + 1;
+  const baseNet = `${oct1}.${oct2}.${oct3}.0`;
+  const baseCidr = 24;
+
+  // Random host requirements (4 departments, sorted largest-first by VLSM)
+  const DEPT_NAMES = ['Sales', 'Engineering', 'Management', 'IT Support', 'Operations', 'Finance', 'HR', 'Security'];
+  const shuffled = [...DEPT_NAMES].sort(() => Math.random() - 0.5).slice(0, 4);
+  const HOST_REQS = [
+    [60, 28, 12, 2],
+    [50, 25, 10, 2],
+    [100, 50, 20, 6],
+    [30, 14, 6, 2],
+  ][Math.floor(Math.random() * 4)];
+
+  const depts = shuffled.map((name, i) => ({ name, hosts: HOST_REQS[i] }))
+                        .sort((a, b) => b.hosts - a.hosts);
+
+  const solutions = calculateVLSM(baseNet, baseCidr, depts.map(d => d.hosts));
+
+  panel.dataset.solutions = JSON.stringify(solutions);
+  panel.dataset.depts     = JSON.stringify(depts);
+
+  panel.innerHTML = `
+    <div class="mb-4 text-center">
+      <div class="text-yellow-400 text-xs uppercase tracking-widest mb-1">Base Network</div>
+      <div class="text-white text-2xl font-bold">${baseNet}/${baseCidr}</div>
+      <div class="text-gray-500 text-xs mt-1">Allocate subnets largest-first</div>
+    </div>
+    <div class="space-y-3">
+      ${depts.map((d, i) => `
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="w-28 shrink-0">
+            <div class="text-gray-300 text-xs font-semibold">${d.name}</div>
+            <div class="text-gray-600 text-xs">${d.hosts} hosts needed</div>
+          </div>
+          <input type="text" data-vlsm-net="${i}" autocomplete="off" spellcheck="false"
+            placeholder="Network (e.g. 192.168.1.0)"
+            class="vlsm-net-input flex-1 min-w-32 bg-gray-800 border border-gray-600 rounded px-3 py-1 text-white text-sm outline-none focus:border-cyan-500 transition-colors font-mono" />
+          <span class="text-gray-500 text-xs">/</span>
+          <input type="number" data-vlsm-cidr="${i}" min="16" max="30"
+            placeholder="CIDR"
+            class="vlsm-cidr-input w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-sm outline-none focus:border-cyan-500 transition-colors font-mono" />
+        </div>`).join('')}
+    </div>
+    <div class="flex justify-between items-center mt-5">
+      <button id="vlsm-hint-btn" class="px-3 py-1.5 text-xs bg-yellow-800 hover:bg-yellow-700 text-yellow-200 rounded">Hint</button>
+      <button id="vlsm-submit" class="px-5 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded font-semibold text-sm">Check Answers</button>
+    </div>
+    <div id="vlsm-results" class="hidden mt-4 space-y-2 text-xs font-mono"></div>`;
+
+  let hintUsed = 0;
+  document.getElementById('vlsm-hint-btn')?.addEventListener('click', () => {
+    const s = solutions[hintUsed % solutions.length];
+    const d = depts[hintUsed % depts.length];
+    if (store.useHint()) {
+      alert(`Hint: ${d.name} (${d.hosts} hosts) → /${s.cidr} subnet mask: ${s.subnetMask}\nStarting from: ${s.networkId}`);
+      hintUsed++;
+    } else {
+      alert('Not enough hints or XP.');
+    }
+  });
+
+  document.getElementById('vlsm-submit')?.addEventListener('click', () => checkVLSMAnswers(solutions, depts));
+}
+
+function checkVLSMAnswers(solutions, depts) {
+  const resultsEl = document.getElementById('vlsm-results');
+  if (!resultsEl) return;
+  resultsEl.classList.remove('hidden');
+
+  let allCorrect = true;
+  const rows = solutions.map((sol, i) => {
+    const netInput  = document.querySelector(`[data-vlsm-net="${i}"]`);
+    const cidrInput = document.querySelector(`[data-vlsm-cidr="${i}"]`);
+    if (!netInput || !cidrInput) return '';
+
+    const userNet  = (netInput.value || '').trim();
+    const userCidr = parseInt(cidrInput.value, 10);
+    const netOk    = userNet === sol.networkId;
+    const cidrOk   = userCidr === sol.cidr;
+    const rowOk    = netOk && cidrOk;
+    if (!rowOk) allCorrect = false;
+
+    netInput.classList.toggle('border-green-500', netOk);
+    netInput.classList.toggle('border-red-500',   !netOk);
+    cidrInput.classList.toggle('border-green-500', cidrOk);
+    cidrInput.classList.toggle('border-red-500',   !cidrOk);
+
+    return `<div class="flex gap-2 items-center ${rowOk ? 'text-green-400' : 'text-red-400'}">
+      <span>${rowOk ? '✓' : '✗'}</span>
+      <span class="w-20 text-gray-400">${depts[i]?.name}</span>
+      <span class="text-gray-500">→</span>
+      <span>${sol.networkId}/${sol.cidr}</span>
+      <span class="text-gray-600">(${sol.subnetMask} · ${sol.totalHosts} hosts · bcast: ${sol.broadcast})</span>
+    </div>`;
+  });
+
+  resultsEl.innerHTML = `
+    <div class="font-bold ${allCorrect ? 'text-green-400' : 'text-yellow-400'} mb-2">
+      ${allCorrect ? '✓ PERFECT VLSM! +75 XP' : 'Solution:'}
+    </div>
+    ${rows.join('')}`;
+
+  if (allCorrect) {
+    store.addXP(75, 'vlsm_perfect');
+    store.unlockAchievement('vlsm_master', 'VLSM Master');
+  }
 }
 
 function generateSubnetProblem() {
@@ -3878,16 +4123,45 @@ function renderFlashSummary() {
   const missed = results.length - gotIt;
   const pct    = results.length > 0 ? Math.round((gotIt / results.length) * 100) : 0;
 
+  // SRS distribution across all cards in the session
+  const allIds = cards.map(c => c.id).filter(Boolean);
+  const srsStats = store.getSRSStats(allIds);
+  const srsBars = [
+    { label: 'NEW',      count: srsStats.new,      color: 'bg-gray-500',   text: 'text-gray-400'   },
+    { label: 'DUE',      count: srsStats.due,       color: 'bg-red-500',    text: 'text-red-400'    },
+    { label: 'LEARNING', count: srsStats.learning,  color: 'bg-yellow-500', text: 'text-yellow-400' },
+    { label: 'MASTERED', count: srsStats.mastered,  color: 'bg-green-500',  text: 'text-green-400'  },
+  ].map(b => {
+    const pctBar = allIds.length > 0 ? Math.round((b.count / allIds.length) * 100) : 0;
+    return `
+      <div class="flex items-center gap-2 text-xs">
+        <span class="w-16 ${b.text} font-mono">${b.label}</span>
+        <div class="flex-1 bg-gray-800 rounded h-2 overflow-hidden">
+          <div class="${b.color} h-full rounded" style="width:${pctBar}%"></div>
+        </div>
+        <span class="w-8 text-right ${b.text}">${b.count}</span>
+      </div>`;
+  }).join('');
+
   area.innerHTML = `
-    <div class="bg-gray-900 border border-purple-800 rounded-xl p-6 text-center space-y-4">
-      <div class="text-4xl">${pct >= 80 ? '⚡' : pct >= 60 ? '📖' : '💡'}</div>
-      <div class="text-3xl font-bold font-mono ${pct >= 80 ? 'text-green-400' : pct >= 60 ? 'text-yellow-400' : 'text-red-400'}">${pct}%</div>
-      <div class="flex justify-center gap-8 text-sm">
-        <div><span class="text-green-400 font-bold text-xl">${gotIt}</span><div class="text-gray-500 text-xs">Got It</div></div>
-        <div><span class="text-red-400 font-bold text-xl">${missed}</span><div class="text-gray-500 text-xs">Missed</div></div>
-        <div><span class="text-gray-300 font-bold text-xl">${cards.length}</span><div class="text-gray-500 text-xs">Total</div></div>
+    <div class="bg-gray-900 border border-purple-800 rounded-xl p-6 space-y-4">
+      <div class="text-center space-y-2">
+        <div class="text-4xl">${pct >= 80 ? '⚡' : pct >= 60 ? '📖' : '💡'}</div>
+        <div class="text-3xl font-bold font-mono ${pct >= 80 ? 'text-green-400' : pct >= 60 ? 'text-yellow-400' : 'text-red-400'}">${pct}%</div>
+        <div class="flex justify-center gap-8 text-sm">
+          <div><span class="text-green-400 font-bold text-xl">${gotIt}</span><div class="text-gray-500 text-xs">Got It</div></div>
+          <div><span class="text-red-400 font-bold text-xl">${missed}</span><div class="text-gray-500 text-xs">Missed</div></div>
+          <div><span class="text-gray-300 font-bold text-xl">${cards.length}</span><div class="text-gray-500 text-xs">Total</div></div>
+        </div>
       </div>
-      <p class="text-xs text-gray-600">SRS updated for all ${results.length} rated cards.</p>
+
+      ${allIds.length > 0 ? `
+      <div class="border-t border-gray-800 pt-3 space-y-1.5">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">SRS Deck Health</div>
+        ${srsBars}
+        <p class="text-xs text-gray-700 mt-1">SRS updated for all ${results.length} rated cards.</p>
+      </div>` : ''}
+
       <div class="flex gap-3 justify-center pt-2">
         <button id="flash-again" class="px-5 py-2 bg-purple-800 hover:bg-purple-700 text-purple-200 rounded font-semibold text-sm">Study Again</button>
         <button id="flash-back"  class="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-sm">New Session</button>
@@ -3941,7 +4215,7 @@ function renderReference() {
       </div>`
     },
     {
-      id: 'ports', title: 'Well-Known Ports',
+      id: 'ports', title: 'Well-Known Ports', diagramId: 'ports',
       content: T(
         ['Port','Protocol','Transport','Description'],
         [
@@ -3996,7 +4270,7 @@ function renderReference() {
       </div>`
     },
     {
-      id: 'routing', title: 'Routing Protocol Comparison',
+      id: 'routing', title: 'Routing Protocol Comparison', diagramId: 'routing',
       content: T(
         ['Protocol','Type','Admin Distance','Algorithm','Metric','Timers'],
         [
@@ -4101,7 +4375,7 @@ function renderReference() {
       </div>`
     },
     {
-      id: 'fhrp', title: 'HSRP / VRRP / GLBP',
+      id: 'fhrp', title: 'HSRP / VRRP / GLBP', diagramId: 'hsrp',
       content: T(
         ['Feature','HSRP','VRRP','GLBP'],
         [
@@ -4119,7 +4393,7 @@ function renderReference() {
       ) + `<div class="mt-2 text-xs text-gray-500">HSRP v2 supports IPv6 and uses 224.0.0.102. GLBP AVG = Active Virtual Gateway; AVF = Active Virtual Forwarder.</div>`
     },
     {
-      id: 'snmp', title: 'SNMP Versions',
+      id: 'snmp', title: 'SNMP Versions', diagramId: 'snmp',
       content: T(
         ['Feature','SNMPv1','SNMPv2c','SNMPv3'],
         [
@@ -4144,7 +4418,7 @@ function renderReference() {
       </div>`
     },
     {
-      id: 'aaa', title: 'AAA / TACACS+ / RADIUS',
+      id: 'aaa', title: 'AAA / TACACS+ / RADIUS', diagramId: 'aaa',
       content: `<div class="text-xs text-gray-400 mb-3">
         <span class="text-cyan-300">AAA</span> = Authentication (who are you?) · Authorization (what can you do?) · Accounting (what did you do?)
       </div>` +
@@ -4685,6 +4959,11 @@ const DIAGRAM_MODULES = {
   ipv6:       './js/diagrams/ipv6.js',
   acl:        './js/diagrams/acl.js',
   subnetting: './js/diagrams/subnetting.js',
+  ports:      './js/diagrams/ports.js',
+  routing:    './js/diagrams/routing.js',
+  hsrp:       './js/diagrams/hsrp.js',
+  snmp:       './js/diagrams/snmp.js',
+  aaa:        './js/diagrams/aaa.js',
 };
 
 async function renderDiagram(diagramId, containerEl) {

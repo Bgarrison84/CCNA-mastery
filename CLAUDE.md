@@ -291,8 +291,13 @@ Full notes in memory: project_phase9.md
 Goal: interactivity audit + security training + cloud training + practical projects.
 Work through pillars in order, one per session. Ask before moving to next pillar.
 
-### Pillar 1 — Interactivity Audit
-Scan every view for static areas that can become interactive. Priority: Reference sections without diagrams (ports, routing, HSRP, SNMP, AAA), Boss Battle end screen, VLSM drill mode in Subnetting, Story Mode visual timeline, Flashcard SRS curve chart.
+### Pillar 1 — Interactivity Audit *(done 2026-03-27)*
+- [x] 5 new diagram modules: `ports.js` (searchable/filterable table), `routing.js` (AD bar chart + detail panel), `hsrp.js` (failover animation, HSRP/VRRP/GLBP tabs), `snmp.js` (GET/TRAP/INFORM step-through), `aaa.js` (802.1X/TACACS+/RADIUS packet flow)
+- [x] All 5 wired into Reference sections via `diagramId` + DIAGRAM_MODULES map
+- [x] Boss Battle end screen: per-phase accuracy breakdown bars (easy/medium/hard) + correct/total count; `phaseStats` + `correctCount` added to BossBattle result object
+- [x] VLSM drill mode: new tab in Subnetting view; generates base /24 + 4 department host requirements; validates network address + CIDR per subnet; +75 XP for perfect
+- [x] Story Mode 6-week timeline: collapsible week nodes (green=done, amber=active, gray=locked) with per-week beat progress bars, above mission card
+- [x] Flashcard summary SRS distribution: NEW/DUE/LEARNING/MASTERED bar chart derived from `store.getSRSStats()` on session card IDs
 
 ### Pillar 2 — Security Training Module
 New domain/section covering: Threat Taxonomy (card-sort diagram), Firewall Types (packet flow), IDS/IPS placement, AAA packet-flow step-through, Cryptography (key exchange animation), VPN Types topology, ACL security scenarios, Zero Trust principles. 100+ new questions + "The Breach" Boss Battle. 3 new security labs (basic ACL hardening, local AAA, Zone-Based Firewall).
