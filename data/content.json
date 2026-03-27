@@ -6203,6 +6203,220 @@
           "explanation": "DHCP Starvation exhausts the IP address pool. The attacker then often sets up a rogue DHCP server to serve malicious DNS/gateway info. Mitigated with DHCP Snooping rate limiting on untrusted ports."
         }
       ]
+    },
+    {
+      "id": "boss_w6_the_migration",
+      "name": "The Migration",
+      "week": 6,
+      "xpReward": 400,
+      "perfectBonus": 150,
+      "description": "The CTO just mandated a full cloud migration. Prove you know IaaS from SaaS \u2014 and survive the cutover.",
+      "questions": [
+        {
+          "id": "mig_q1",
+          "type": "multiple_choice",
+          "difficulty": "easy",
+          "question": "A company moves its email system to Microsoft 365. Which cloud service model is this?",
+          "options": [
+            "IaaS",
+            "PaaS",
+            "SaaS",
+            "On-Premises"
+          ],
+          "correct_answer": "2",
+          "explanation": "SaaS (Software as a Service) \u2014 the provider manages everything, the customer only consumes the application. Microsoft 365, Gmail, and Salesforce are classic SaaS examples."
+        },
+        {
+          "id": "mig_q2",
+          "type": "multiple_choice",
+          "difficulty": "easy",
+          "question": "Which cloud service model gives you the most control over the operating system and runtime?",
+          "options": [
+            "SaaS",
+            "PaaS",
+            "IaaS",
+            "FaaS (Serverless)"
+          ],
+          "correct_answer": "2",
+          "explanation": "IaaS (Infrastructure as a Service) provides virtual machines where you install and manage the OS, middleware, and applications. PaaS abstracts the OS away; SaaS abstracts everything."
+        },
+        {
+          "id": "mig_q3",
+          "type": "multiple_choice",
+          "difficulty": "easy",
+          "question": "What is a cloud Availability Zone (AZ)?",
+          "options": [
+            "A geographic region containing multiple cloud data centres",
+            "An isolated data centre facility within a cloud region",
+            "A virtual network segment in the cloud",
+            "A cloud provider's point of presence for CDN"
+          ],
+          "correct_answer": "1",
+          "explanation": "An Availability Zone is an isolated data centre (or group of DCs) within a Region with independent power, cooling, and networking. Deploying across AZs provides fault tolerance against AZ-level failure."
+        },
+        {
+          "id": "mig_q4",
+          "type": "multiple_choice",
+          "difficulty": "medium",
+          "question": "What is the cloud equivalent of a physical network or VLAN environment?",
+          "options": [
+            "Security Group",
+            "VPC (Virtual Private Cloud)",
+            "Internet Gateway",
+            "Availability Zone"
+          ],
+          "correct_answer": "1",
+          "explanation": "A VPC (Virtual Private Cloud) is a logically isolated virtual network you define in the cloud \u2014 analogous to your physical on-prem network or VLAN infrastructure."
+        },
+        {
+          "id": "mig_q5",
+          "type": "multiple_choice",
+          "difficulty": "medium",
+          "question": "A Security Group in AWS differs from a Network ACL in which key way?",
+          "options": [
+            "Security Groups are stateless; Network ACLs are stateful",
+            "Security Groups are stateful (return traffic auto-permitted); Network ACLs are stateless",
+            "Security Groups apply at the subnet level; NACLs apply to instances",
+            "There is no functional difference"
+          ],
+          "correct_answer": "1",
+          "explanation": "Security Groups are stateful \u2014 like a firewall, return traffic for established connections is automatically permitted. NACLs are stateless \u2014 like an ACL, you must explicitly allow both inbound and outbound directions."
+        },
+        {
+          "id": "mig_q6",
+          "type": "multiple_choice",
+          "difficulty": "medium",
+          "question": "Which cloud component allows instances in a private subnet to initiate outbound internet traffic without being directly reachable from the internet?",
+          "options": [
+            "Internet Gateway",
+            "NAT Gateway",
+            "VPN Gateway",
+            "Transit Gateway"
+          ],
+          "correct_answer": "1",
+          "explanation": "A NAT Gateway allows private subnet instances to reach the internet (e.g., for software updates) while blocking all unsolicited inbound connections \u2014 similar to a NAT router in an on-prem network."
+        },
+        {
+          "id": "mig_q7",
+          "type": "multiple_choice",
+          "difficulty": "medium",
+          "question": "What is the primary benefit of a hybrid cloud deployment model?",
+          "options": [
+            "Eliminates the need for on-premises infrastructure entirely",
+            "Allows sensitive workloads to remain on-prem while bursting to public cloud for peak demand",
+            "Reduces latency by placing all workloads in a single location",
+            "Provides free unlimited cloud resources during peak periods"
+          ],
+          "correct_answer": "1",
+          "explanation": "Hybrid cloud combines private (on-prem or hosted) and public cloud. Organisations keep sensitive/regulated data on-prem for compliance while using public cloud for scalability and less sensitive workloads."
+        },
+        {
+          "id": "mig_q8",
+          "type": "multiple_choice",
+          "difficulty": "hard",
+          "question": "Which of the following best describes SD-WAN's advantage over traditional WAN?",
+          "options": [
+            "SD-WAN eliminates the need for encryption on WAN links",
+            "SD-WAN uses a centralised controller to manage multiple WAN transports with application-aware routing and automatic failover",
+            "SD-WAN replaces all IP routing with MPLS label switching",
+            "SD-WAN requires dedicated hardware at every branch"
+          ],
+          "correct_answer": "1",
+          "explanation": "SD-WAN abstracts the WAN transport (MPLS, broadband, LTE) behind a software control plane. It provides application-aware routing (voice over MPLS, bulk over broadband), automatic failover, and centralised policy management."
+        },
+        {
+          "id": "mig_q9",
+          "type": "multiple_choice",
+          "difficulty": "hard",
+          "question": "SASE (Secure Access Service Edge) converges which two domains?",
+          "options": [
+            "DNS and load balancing",
+            "Networking (SD-WAN) and security (FWaaS, CASB, ZTNA, SWG) delivered from the cloud",
+            "VPN and firewall only",
+            "IaaS and PaaS service models"
+          ],
+          "correct_answer": "1",
+          "explanation": "SASE converges SD-WAN networking with cloud-delivered security services: FWaaS (Firewall-as-a-Service), CASB (Cloud Access Security Broker), ZTNA (Zero Trust Network Access), and SWG (Secure Web Gateway)."
+        },
+        {
+          "id": "mig_q10",
+          "type": "multiple_choice",
+          "difficulty": "hard",
+          "question": "In Infrastructure as Code (IaC), which tool is considered agentless and uses SSH/WinRM to configure managed nodes?",
+          "options": [
+            "Puppet",
+            "Chef",
+            "Ansible",
+            "SaltStack"
+          ],
+          "correct_answer": "2",
+          "explanation": "Ansible is agentless \u2014 it connects to managed nodes via SSH (Linux) or WinRM (Windows) with no daemon required. Puppet and Chef require agents installed on managed nodes. This simplifies management but can be slower at scale."
+        },
+        {
+          "id": "mig_q11",
+          "type": "multiple_choice",
+          "difficulty": "hard",
+          "question": "Terraform differs from Ansible in that Terraform primarily focuses on:",
+          "options": [
+            "Configuration management and software deployment",
+            "Infrastructure provisioning (creating/destroying cloud resources) using a declarative model",
+            "Real-time monitoring and alerting of cloud infrastructure",
+            "Container orchestration and microservices deployment"
+          ],
+          "correct_answer": "1",
+          "explanation": "Terraform (HashiCorp) is an Infrastructure as Code tool focused on provisioning infrastructure (VMs, networks, DNS, etc.) in a declarative, idempotent way. Ansible is better suited for configuration management after infrastructure exists."
+        },
+        {
+          "id": "mig_q12",
+          "type": "true_false",
+          "difficulty": "easy",
+          "question": "In a public cloud model, the customer is responsible for the physical security of the data centre hardware.",
+          "correct_answer": "false",
+          "explanation": "In any cloud model, the provider is responsible for physical security of the data centre. The Shared Responsibility Model defines what the customer vs provider manages \u2014 physical facilities are always the provider's responsibility."
+        },
+        {
+          "id": "mig_q13",
+          "type": "multiple_choice",
+          "difficulty": "medium",
+          "question": "What is a CASB (Cloud Access Security Broker)?",
+          "options": [
+            "A VPN concentrator placed in front of cloud applications",
+            "A security enforcement point between users and cloud services that provides visibility, compliance, and threat protection for SaaS",
+            "A load balancer for distributing traffic across cloud regions",
+            "A certificate authority for issuing cloud TLS certificates"
+          ],
+          "correct_answer": "1",
+          "explanation": "A CASB sits between users and cloud applications (SaaS/IaaS) enforcing security policies: DLP, access control, anomaly detection, compliance. It provides visibility into shadow IT (unauthorised SaaS usage)."
+        },
+        {
+          "id": "mig_q14",
+          "type": "multiple_choice",
+          "difficulty": "hard",
+          "question": "Zero Trust Architecture differs from traditional perimeter security in that it:",
+          "options": [
+            "Trusts all traffic inside the corporate network",
+            "Requires no authentication for internal users",
+            "Assumes no implicit trust based on network location \u2014 every access request is verified regardless of source",
+            "Eliminates the need for firewalls entirely"
+          ],
+          "correct_answer": "2",
+          "explanation": "Zero Trust: 'Never trust, always verify.' No device or user gets implicit trust because they are on the internal network. Every request requires authentication, authorisation, and is continuously validated. Protects against lateral movement after breach."
+        },
+        {
+          "id": "mig_q15",
+          "type": "multiple_choice",
+          "difficulty": "medium",
+          "question": "Which cloud deployment model is used exclusively by organisations with a shared regulatory or mission requirement, such as government agencies?",
+          "options": [
+            "Public Cloud",
+            "Private Cloud",
+            "Hybrid Cloud",
+            "Community Cloud"
+          ],
+          "correct_answer": "3",
+          "explanation": "Community Cloud is shared infrastructure managed for a specific group with common concerns (compliance, security, jurisdiction). Examples: FedRAMP (US government), healthcare sector clouds, financial industry shared platforms."
+        }
+      ]
     }
   ],
   "questions": [
@@ -81513,6 +81727,828 @@
         4
       ],
       "explanation": "Hostname must be set first (used in RSA key name). Then domain-name (also used in key name). Then generate RSA keys. Then enforce SSHv2. Finally, restrict VTY to SSH only."
+    },
+    {
+      "id": "ap_cloud_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "Which cloud service model requires the customer to manage the operating system, middleware, and application?",
+      "options": [
+        "SaaS",
+        "PaaS",
+        "IaaS",
+        "CaaS (Container as a Service)"
+      ],
+      "correct_answer": "2",
+      "explanation": "IaaS provides virtualised compute, storage, and networking. The customer manages everything from the OS up. PaaS adds OS and runtime management. SaaS provides the full application."
+    },
+    {
+      "id": "ap_cloud_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "A developer deploys code to Heroku without managing servers or the OS. This is which cloud model?",
+      "options": [
+        "IaaS",
+        "PaaS",
+        "SaaS",
+        "On-Premises"
+      ],
+      "correct_answer": "1",
+      "explanation": "PaaS (Platform as a Service) \u2014 the developer pushes code; the provider manages the runtime, OS, scaling, and patching. Heroku, AWS Elastic Beanstalk, and Azure App Service are PaaS examples."
+    },
+    {
+      "id": "ap_cloud_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "Which cloud deployment model places infrastructure on-premises for exclusive organisational use, managed either internally or by a third party?",
+      "options": [
+        "Public Cloud",
+        "Private Cloud",
+        "Hybrid Cloud",
+        "Community Cloud"
+      ],
+      "correct_answer": "1",
+      "explanation": "Private Cloud is dedicated to a single organisation. It can be on-premises (e.g., VMware vSphere) or hosted by a provider exclusively for that organisation. Provides maximum control and compliance suitability."
+    },
+    {
+      "id": "ap_cloud_004",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "In the Shared Responsibility Model, which component is ALWAYS the cloud provider's responsibility regardless of the service model?",
+      "options": [
+        "Application security patching",
+        "Physical data centre security and hardware",
+        "Operating system updates",
+        "Data encryption at rest"
+      ],
+      "correct_answer": "1",
+      "explanation": "Physical security of data centres and underlying hardware is ALWAYS the provider's responsibility across IaaS, PaaS, and SaaS. The dividing line shifts upward depending on the service model."
+    },
+    {
+      "id": "ap_cloud_005",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "A company uses AWS for web servers but keeps its financial database on-premises connected via Direct Connect. What deployment model is this?",
+      "options": [
+        "Public Cloud",
+        "Private Cloud",
+        "Hybrid Cloud",
+        "Community Cloud"
+      ],
+      "correct_answer": "2",
+      "explanation": "Hybrid Cloud combines public cloud (AWS web servers) with private/on-premises infrastructure (financial DB), connected via dedicated connectivity (Direct Connect). The key is workloads running in both environments."
+    },
+    {
+      "id": "ap_cloud_006",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "What is 'cloud bursting' in a hybrid cloud model?",
+      "options": [
+        "Moving all workloads from on-premises to the public cloud permanently",
+        "Automatically scaling into public cloud resources when private cloud capacity is exhausted",
+        "Distributing traffic globally across multiple cloud providers",
+        "Replicating data to a public cloud for disaster recovery only"
+      ],
+      "correct_answer": "1",
+      "explanation": "Cloud bursting: when on-prem/private cloud resources hit capacity, workloads automatically overflow ('burst') into the public cloud. The public cloud handles peak demand; non-sensitive workloads scale elastically."
+    },
+    {
+      "id": "ap_cloud_007",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "What is an Internet Gateway in AWS?",
+      "options": [
+        "A managed VPN endpoint for site-to-site connectivity",
+        "A horizontally scalable gateway that enables internet access for resources in a VPC",
+        "A load balancer for distributing HTTP traffic",
+        "A DNS resolver for VPC resources"
+      ],
+      "correct_answer": "1",
+      "explanation": "An Internet Gateway (IGW) is attached to a VPC and enables internet communication. Public subnets have a route to the IGW. Without an IGW, VPC resources cannot reach the internet."
+    },
+    {
+      "id": "ap_cloud_008",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "In AWS, what is the difference between a public subnet and a private subnet?",
+      "options": [
+        "Public subnets use IPv6; private subnets use IPv4",
+        "Public subnets have a route to an Internet Gateway; private subnets do not",
+        "Public subnets are in the us-east-1 region; private subnets are in all other regions",
+        "Public subnets allow all traffic; private subnets deny all traffic by default"
+      ],
+      "correct_answer": "1",
+      "explanation": "The defining characteristic: a public subnet has a route 0.0.0.0/0 pointing to an Internet Gateway in its route table. A private subnet has no such route \u2014 instances cannot be directly reached from the internet."
+    },
+    {
+      "id": "ap_cloud_009",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "How does AWS Direct Connect differ from a VPN Gateway?",
+      "options": [
+        "Direct Connect is wireless; VPN Gateway uses fibre",
+        "Direct Connect provides a dedicated private physical connection to AWS; VPN Gateway creates an encrypted tunnel over the public internet",
+        "Direct Connect supports IPv6; VPN Gateway supports IPv4 only",
+        "They are functionally identical \u2014 only the name differs"
+      ],
+      "correct_answer": "1",
+      "explanation": "Direct Connect provides a dedicated, private, low-latency physical circuit from on-prem to AWS \u2014 bypassing the public internet. VPN Gateway creates an IPsec tunnel over the internet \u2014 cheaper but variable latency and shared bandwidth."
+    },
+    {
+      "id": "ap_cloud_010",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "A Network ACL in AWS is applied at which level and uses what matching model?",
+      "options": [
+        "Instance level, stateful",
+        "Subnet level, stateless (rules evaluated in order; both inbound and outbound must be explicitly allowed)",
+        "VPC level, stateful",
+        "Region level, stateless"
+      ],
+      "correct_answer": "1",
+      "explanation": "NACLs apply at the subnet level and are stateless \u2014 like a traditional ACL. Rules are evaluated in numbered order. You must explicitly allow both the inbound request AND the outbound response (ephemeral ports)."
+    },
+    {
+      "id": "ap_virt_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "What is a hypervisor?",
+      "options": [
+        "A physical server with extra CPU cores",
+        "Software that creates and manages virtual machines by abstracting physical hardware",
+        "A network device that virtualises switch ports",
+        "A container orchestration platform"
+      ],
+      "correct_answer": "1",
+      "explanation": "A hypervisor (VMM \u2014 Virtual Machine Monitor) abstracts physical hardware and allocates it to VMs. Type 1 (bare-metal) runs directly on hardware (VMware ESXi, Hyper-V, KVM). Type 2 runs on a host OS (VirtualBox, VMware Workstation)."
+    },
+    {
+      "id": "ap_virt_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What is the key difference between a virtual machine and a container?",
+      "options": [
+        "VMs run on bare metal; containers require a hypervisor",
+        "Containers share the host OS kernel; VMs each have their own full OS",
+        "VMs are faster than containers; containers are slower",
+        "Containers support Windows only; VMs support Linux only"
+      ],
+      "correct_answer": "1",
+      "explanation": "Containers (Docker, Podman) share the host OS kernel \u2014 lightweight, fast startup. VMs include a full OS per instance \u2014 more isolated but heavier. Containers trade isolation for efficiency; VMs trade efficiency for stronger isolation."
+    },
+    {
+      "id": "ap_virt_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What does NFV (Network Functions Virtualisation) accomplish?",
+      "options": [
+        "Separates the network control plane from the data plane",
+        "Runs network functions (firewall, load balancer, WAN optimiser) as software VMs on commodity hardware instead of dedicated appliances",
+        "Virtualises the physical switch fabric in a data centre",
+        "Provides container orchestration for microservices"
+      ],
+      "correct_answer": "1",
+      "explanation": "NFV replaces dedicated network appliances (firewalls, IDS, load balancers) with software running on standard x86 servers. Reduces hardware costs and increases flexibility. SDN separates control/data planes \u2014 NFV virtualises the functions themselves."
+    },
+    {
+      "id": "ap_virt_004",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "true_false",
+      "difficulty": "easy",
+      "question": "SDN (Software-Defined Networking) and NFV (Network Functions Virtualisation) are the same technology.",
+      "correct_answer": "false",
+      "explanation": "SDN separates the network control plane from the data/forwarding plane \u2014 centralising routing decisions. NFV virtualises network functions (firewall, IDS) onto commodity hardware. They are complementary but distinct concepts."
+    },
+    {
+      "id": "ap_sdwan_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "Which SD-WAN capability automatically routes real-time applications (VoIP) over the best-performing WAN path?",
+      "options": [
+        "Dynamic Multipoint VPN (DMVPN)",
+        "Application-aware routing with Quality of Experience (QoE) measurement",
+        "BGP path selection based on AS path length",
+        "OSPF cost-based load balancing"
+      ],
+      "correct_answer": "1",
+      "explanation": "SD-WAN continuously measures each WAN path's latency, jitter, and packet loss. Application-aware routing places real-time traffic (voice, video) on the path meeting QoE thresholds, automatically failing over if quality degrades."
+    },
+    {
+      "id": "ap_sdwan_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "What is ZTNA (Zero Trust Network Access) and how does it differ from traditional VPN?",
+      "options": [
+        "ZTNA encrypts all traffic; VPN does not",
+        "ZTNA grants access based on identity and device posture to specific apps only; VPN grants full network access after authentication",
+        "ZTNA uses TLS; VPN uses IPsec \u2014 security level is identical",
+        "ZTNA is cloud-only; VPN works on-premises only"
+      ],
+      "correct_answer": "1",
+      "explanation": "Traditional VPN: authenticate once, get full network access \u2014 lateral movement risk. ZTNA: every access request is verified (identity + device posture + context), and access is granted only to the specific application requested \u2014 not the entire network."
+    },
+    {
+      "id": "ap_sdwan_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "A Secure Web Gateway (SWG) in a SASE architecture primarily provides:",
+      "options": [
+        "Encrypted tunnels between branch offices",
+        "URL filtering, malware scanning, and content inspection for outbound web traffic",
+        "Identity federation between cloud identity providers",
+        "BGP route filtering for internet-bound traffic"
+      ],
+      "correct_answer": "1",
+      "explanation": "SWG intercepts outbound web traffic and applies URL filtering (block malicious/inappropriate sites), malware scanning, and data loss prevention (DLP). In SASE, the SWG is cloud-delivered at the nearest PoP."
+    },
+    {
+      "id": "ap_ansible_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "Ansible uses which language for its playbooks?",
+      "options": [
+        "JSON",
+        "Python",
+        "YAML",
+        "XML"
+      ],
+      "correct_answer": "2",
+      "explanation": "Ansible playbooks are written in YAML (Yet Another Markup Language) \u2014 human-readable, indentation-based syntax. The underlying engine is Python, but the playbooks themselves are YAML."
+    },
+    {
+      "id": "ap_ansible_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "What does 'idempotent' mean in the context of Ansible?",
+      "options": [
+        "Running the playbook multiple times always produces the same result; changes only happen when needed",
+        "Ansible runs tasks in parallel on all hosts simultaneously",
+        "Ansible rolls back changes if a task fails",
+        "The playbook is encrypted before being sent to managed nodes"
+      ],
+      "correct_answer": "0",
+      "explanation": "Idempotency: running a playbook multiple times produces the same result. If the desired state already exists, no changes are made. This makes automation safe to run repeatedly without unintended side effects."
+    },
+    {
+      "id": "ap_ansible_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "Which Ansible component lists the managed nodes and groups them for targeting?",
+      "options": [
+        "Playbook",
+        "Module",
+        "Inventory",
+        "Role"
+      ],
+      "correct_answer": "2",
+      "explanation": "The Ansible Inventory (hosts file or dynamic inventory script) defines managed nodes and organises them into groups. Playbooks target inventory groups or specific hosts."
+    },
+    {
+      "id": "ap_ansible_004",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What is an Ansible module?",
+      "options": [
+        "A YAML file defining a sequence of tasks",
+        "A reusable unit of code that performs a specific task (e.g., ios_config, apt, copy)",
+        "A variable file included in a playbook",
+        "An encrypted secrets store"
+      ],
+      "correct_answer": "1",
+      "explanation": "Ansible modules are the actual units of work \u2014 they perform specific tasks: ios_config (configure IOS devices), apt (manage packages), copy (copy files). Playbooks orchestrate which modules run and in what order."
+    },
+    {
+      "id": "ap_ansible_005",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "Puppet uses which configuration model, and what is its key difference from Ansible's execution model?",
+      "options": [
+        "Puppet uses push model; Ansible uses pull model",
+        "Puppet uses declarative pull model (agents poll a Puppet Master); Ansible uses an imperative push model via SSH",
+        "Puppet and Ansible both use push model; only the language differs",
+        "Puppet uses SSH like Ansible but requires Ruby instead of Python"
+      ],
+      "correct_answer": "1",
+      "explanation": "Puppet: declarative (define desired state), pull model (agents on managed nodes check in with Puppet Master every 30 min and apply changes). Ansible: agentless, push model (controller SSHes to nodes and runs tasks imperatively on demand)."
+    },
+    {
+      "id": "ap_api_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "Which HTTP method is used to retrieve data from a REST API without modifying it?",
+      "options": [
+        "POST",
+        "PUT",
+        "GET",
+        "DELETE"
+      ],
+      "correct_answer": "2",
+      "explanation": "GET retrieves data (read-only, idempotent). POST creates a new resource. PUT updates/replaces a resource. DELETE removes a resource. PATCH partially updates a resource."
+    },
+    {
+      "id": "ap_api_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "REST APIs most commonly use which data format for request and response bodies?",
+      "options": [
+        "XML only",
+        "YAML only",
+        "JSON (JavaScript Object Notation)",
+        "CSV"
+      ],
+      "correct_answer": "2",
+      "explanation": "While REST APIs can technically use any format, JSON is by far the most common for modern APIs due to its readability and lightweight nature. NETCONF uses XML; RESTCONF supports both XML and JSON."
+    },
+    {
+      "id": "ap_api_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What HTTP status code range indicates a successful API response?",
+      "options": [
+        "1xx",
+        "2xx",
+        "4xx",
+        "5xx"
+      ],
+      "correct_answer": "1",
+      "explanation": "2xx = success (200 OK, 201 Created, 204 No Content). 4xx = client errors (400 Bad Request, 401 Unauthorized, 404 Not Found). 5xx = server errors (500 Internal Server Error). 3xx = redirects."
+    },
+    {
+      "id": "ap_api_004",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "Which protocol uses YANG data models and SSH transport to configure network devices, and is considered the successor to SNMP for network management?",
+      "options": [
+        "RESTCONF",
+        "NETCONF",
+        "gRPC",
+        "SNMP v3"
+      ],
+      "correct_answer": "1",
+      "explanation": "NETCONF (RFC 6241) uses SSH (TCP port 830), XML-encoded data, and YANG data models for configuration management. It supports transactions with commit/rollback. RESTCONF is a REST-based alternative using HTTP/HTTPS."
+    },
+    {
+      "id": "ap_api_005",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "What is the purpose of a YANG model in network automation?",
+      "options": [
+        "A scripting language for writing Ansible playbooks",
+        "A data modelling language that defines the structure and constraints of configuration and operational data for network devices",
+        "A transport protocol replacing SSH for NETCONF",
+        "A GUI framework for visualising network topology"
+      ],
+      "correct_answer": "1",
+      "explanation": "YANG (Yet Another Next Generation) is a data modelling language (RFC 6020/7950) that defines the schema of configuration and state data. NETCONF/RESTCONF use YANG models to validate and structure the XML/JSON data they exchange."
+    },
+    {
+      "id": "ap_api_006",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "In a northbound/southbound API architecture (SDN), which boundary do applications use to communicate with the SDN controller?",
+      "options": [
+        "Southbound API (e.g., OpenFlow, NETCONF)",
+        "Northbound API (e.g., REST API, Python SDK)",
+        "Eastbound API (inter-controller)",
+        "Westbound API (legacy device integration)"
+      ],
+      "correct_answer": "1",
+      "explanation": "Northbound APIs: between SDN controller and applications/orchestrators (REST, Python SDK). Southbound APIs: between SDN controller and network devices (OpenFlow, NETCONF, gRPC). East/Westbound: between controllers."
+    },
+    {
+      "id": "ap_sdn_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What does SDN separate in traditional networking?",
+      "options": [
+        "IPv4 and IPv6 forwarding",
+        "The control plane (routing decisions) from the data plane (packet forwarding)",
+        "Management traffic from user traffic",
+        "Physical and virtual switches"
+      ],
+      "correct_answer": "1",
+      "explanation": "SDN decouples the control plane (decides where traffic goes \u2014 traditionally in each device's CPU) from the data plane (actually forwards packets \u2014 ASICs). A centralised SDN controller manages control plane logic for all devices."
+    },
+    {
+      "id": "ap_sdn_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "Cisco's DNA Center (now Catalyst Center) uses which southbound protocol to program network devices?",
+      "options": [
+        "OpenFlow",
+        "NETCONF/YANG over SSH",
+        "SNMP v2c",
+        "Telnet scripting"
+      ],
+      "correct_answer": "1",
+      "explanation": "Cisco DNA Center uses NETCONF/YANG for southbound communication with IOS-XE devices. It also supports RESTCONF and CLI via SSH. OpenFlow is more common with open-source SDN controllers like OpenDaylight."
+    },
+    {
+      "id": "ap_sdn_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "In a traditional distributed network, what is the control plane responsible for?",
+      "options": [
+        "Switching frames at line rate using ASICs",
+        "Building and maintaining the routing/forwarding table (RIB/FIB) using routing protocols",
+        "Encrypting traffic between interfaces",
+        "Providing a management interface (SSH/SNMP)"
+      ],
+      "correct_answer": "1",
+      "explanation": "Control plane: runs routing protocols (OSPF, BGP), builds the Routing Information Base (RIB), installs the best routes into the Forwarding Information Base (FIB). Data plane: uses the FIB to forward packets in hardware at line rate."
+    },
+    {
+      "id": "ap_iac_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What does 'declarative' mean in the context of Infrastructure as Code tools like Terraform?",
+      "options": [
+        "You write step-by-step instructions for how to build the infrastructure",
+        "You describe the desired end state and the tool figures out how to achieve it",
+        "Infrastructure is declared in a programming language like Python",
+        "Each change must be manually approved before applying"
+      ],
+      "correct_answer": "1",
+      "explanation": "Declarative IaC: define what you want (e.g., '3 EC2 instances, 1 VPC') and the tool determines HOW to make it happen. Terraform computes the difference between current state and desired state, then makes only the necessary changes."
+    },
+    {
+      "id": "ap_iac_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "Which command in Terraform shows what changes will be made WITHOUT applying them?",
+      "options": [
+        "terraform apply",
+        "terraform plan",
+        "terraform validate",
+        "terraform diff"
+      ],
+      "correct_answer": "1",
+      "explanation": "terraform plan shows a dry-run: what resources will be created, modified, or destroyed. terraform apply executes the changes. terraform validate checks syntax. This workflow: init \u2192 validate \u2192 plan \u2192 apply \u2192 destroy."
+    },
+    {
+      "id": "ap_multi_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multi_select",
+      "difficulty": "medium",
+      "question": "Which of the following are advantages of cloud computing over on-premises infrastructure? (Select all that apply)",
+      "options": [
+        "Elastic scalability \u2014 scale up/down on demand",
+        "Guaranteed lower latency than on-premises",
+        "No capital expenditure for hardware",
+        "Operational expense model (pay-as-you-go)",
+        "Full physical control over all hardware"
+      ],
+      "correct_answer": [
+        0,
+        2,
+        3
+      ],
+      "explanation": "Cloud advantages: elasticity, no CapEx, pay-as-you-go OpEx. Cloud latency is NOT guaranteed to be lower (often higher than local DC). Physical hardware control is NOT possible in public cloud \u2014 that's a trade-off, not an advantage."
+    },
+    {
+      "id": "ap_multi_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multi_select",
+      "difficulty": "hard",
+      "question": "Which of the following are components of a SASE (Secure Access Service Edge) architecture? (Select all that apply)",
+      "options": [
+        "SD-WAN (software-defined WAN)",
+        "CASB (Cloud Access Security Broker)",
+        "ZTNA (Zero Trust Network Access)",
+        "BGP route reflector",
+        "SWG (Secure Web Gateway)"
+      ],
+      "correct_answer": [
+        0,
+        1,
+        2,
+        4
+      ],
+      "explanation": "SASE combines: SD-WAN, CASB, ZTNA, SWG, and FWaaS (Firewall-as-a-Service). BGP route reflectors are a traditional WAN routing construct \u2014 not a SASE component."
+    },
+    {
+      "id": "ap_multi_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multi_select",
+      "difficulty": "medium",
+      "question": "Which of the following tools are used for Infrastructure as Code (IaC)? (Select all that apply)",
+      "options": [
+        "Terraform",
+        "Ansible",
+        "Wireshark",
+        "AWS CloudFormation",
+        "Puppet"
+      ],
+      "correct_answer": [
+        0,
+        1,
+        3,
+        4
+      ],
+      "explanation": "Terraform, Ansible, CloudFormation, and Puppet are all IaC tools. Wireshark is a network packet analyser \u2014 not an IaC tool."
+    },
+    {
+      "id": "ap_dd_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "drag_drop",
+      "difficulty": "medium",
+      "question": "Order the cloud service models from MOST customer-managed to LEAST customer-managed:",
+      "items": [
+        "On-Premises (you manage everything)",
+        "IaaS (manage OS and up)",
+        "PaaS (manage applications only)",
+        "SaaS (manage configuration only)"
+      ],
+      "correct_order": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "explanation": "On-Prem \u2192 IaaS \u2192 PaaS \u2192 SaaS represents increasing provider management responsibility. On-Prem: manage everything. IaaS: OS and up. PaaS: applications only. SaaS: provider manages all layers."
+    },
+    {
+      "id": "ap_dd_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "drag_drop",
+      "difficulty": "hard",
+      "question": "Match each on-premises concept to its cloud equivalent (order the cloud terms to match):\nOn-prem: Physical Network, Stateful Firewall, Stateless ACL, Leased Line",
+      "items": [
+        "VPC (Virtual Private Cloud)",
+        "Security Group",
+        "Network ACL (NACL)",
+        "Direct Connect / ExpressRoute"
+      ],
+      "correct_order": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "explanation": "Physical Network \u2192 VPC; Stateful Firewall \u2192 Security Group (stateful, instance-level); Stateless ACL \u2192 Network ACL (stateless, subnet-level); Leased Line \u2192 Direct Connect (dedicated private physical connection)."
+    },
+    {
+      "id": "ap_dd_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "drag_drop",
+      "difficulty": "medium",
+      "question": "Order the Terraform workflow steps in the correct sequence:",
+      "items": [
+        "terraform init (initialise providers and modules)",
+        "terraform validate (check configuration syntax)",
+        "terraform plan (preview changes)",
+        "terraform apply (execute changes)",
+        "terraform destroy (tear down when done)"
+      ],
+      "correct_order": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "explanation": "Terraform workflow: init (download providers) \u2192 validate (syntax check) \u2192 plan (dry-run, show changes) \u2192 apply (make changes, confirm state) \u2192 destroy (when decommissioning). Never skip plan before apply in production."
+    },
+    {
+      "id": "ap_cloud_011",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "Which cloud characteristic describes the ability to provision and release resources rapidly without manual provider interaction?",
+      "options": [
+        "Resource pooling",
+        "On-demand self-service",
+        "Measured service",
+        "Broad network access"
+      ],
+      "correct_answer": "1",
+      "explanation": "NIST defines 5 essential cloud characteristics: (1) On-demand self-service, (2) Broad network access, (3) Resource pooling, (4) Rapid elasticity, (5) Measured service. On-demand self-service = provision without human provider interaction."
+    },
+    {
+      "id": "ap_cloud_012",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What is 'elasticity' in cloud computing?",
+      "options": [
+        "The ability to stretch network cables to reach distant locations",
+        "The ability to automatically scale resources up or down to match demand",
+        "The provider's SLA uptime guarantee",
+        "The compression ratio of cloud storage"
+      ],
+      "correct_answer": "1",
+      "explanation": "Elasticity allows cloud resources to scale automatically in response to demand. Scale out (add instances) during peak loads, scale in (remove instances) when demand drops \u2014 paying only for what you use."
+    },
+    {
+      "id": "ap_cloud_013",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "What is 'multitenancy' in cloud computing and what security risk does it introduce?",
+      "options": [
+        "Multiple administrators managing a single cloud account \u2014 risk of privilege escalation",
+        "Multiple customers sharing the same physical infrastructure \u2014 risk of data leakage between tenants if hypervisor isolation fails",
+        "Multiple cloud providers used simultaneously \u2014 risk of data fragmentation",
+        "Multiple applications running on a single VM \u2014 risk of resource exhaustion"
+      ],
+      "correct_answer": "1",
+      "explanation": "Multitenancy: many customers share the same physical servers, isolated by the hypervisor. Risk: VM escape or side-channel attacks (Spectre/Meltdown) could leak data between tenants. Mitigated by dedicated instances (bare metal) for sensitive workloads."
+    },
+    {
+      "id": "ap_auto_001",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "Which of the following best describes the benefit of network automation over manual CLI configuration?",
+      "options": [
+        "Automation allows devices to operate without IOS",
+        "Automation enables consistent, repeatable configuration changes at scale with reduced human error",
+        "Automation replaces the need for network engineers",
+        "Automation only works with virtualised network devices"
+      ],
+      "correct_answer": "1",
+      "explanation": "Network automation enables consistent configuration across hundreds of devices simultaneously, eliminates typos/human error, provides audit trails, and enables change management at scale \u2014 impossible with manual CLI at enterprise scale."
+    },
+    {
+      "id": "ap_auto_002",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What is version control (e.g., Git) used for in network automation?",
+      "options": [
+        "Tracking IOS version upgrades across all devices",
+        "Storing, versioning, and collaborating on automation code and configuration templates with rollback capability",
+        "Controlling which network engineers can access which devices",
+        "Managing software licences for automation tools"
+      ],
+      "correct_answer": "1",
+      "explanation": "Git provides version history, branching, peer review (pull requests), and rollback for automation code (Ansible playbooks, Terraform configs, Python scripts). Treating network config as code ('GitOps') enables audit trails and safe change management."
+    },
+    {
+      "id": "ap_auto_003",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "What is a Jinja2 template used for in network automation?",
+      "options": [
+        "A Python testing framework for validating network configurations",
+        "A templating engine for generating device configurations dynamically from variables",
+        "A data model language replacing YANG",
+        "A REST API client library for Cisco DNA Center"
+      ],
+      "correct_answer": "1",
+      "explanation": "Jinja2 templates allow you to create config templates with variables (e.g., {{ hostname }}, {{ interface_ip }}). Combined with a data source (YAML/CSV), you generate device-specific configs automatically \u2014 used heavily in Ansible and Nornir."
+    },
+    {
+      "id": "ap_cloud_014",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What is the purpose of a CI/CD pipeline in network automation?",
+      "options": [
+        "Continuously monitoring network device CPU and memory",
+        "Automatically testing and deploying configuration changes through stages (lint \u2192 test \u2192 stage \u2192 production)",
+        "Providing a continuous backup of device running-configurations",
+        "Continuously discovering new devices added to the network"
+      ],
+      "correct_answer": "1",
+      "explanation": "CI/CD (Continuous Integration/Continuous Deployment) for networks: code change \u2192 automated lint/syntax check \u2192 automated testing in a lab \u2192 staged rollout \u2192 production. Catches errors before they hit production, enables rapid safe change delivery."
+    },
+    {
+      "id": "ap_cloud_015",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "true_false",
+      "difficulty": "medium",
+      "question": "Ansible requires a dedicated agent process running on each managed network device to execute playbooks.",
+      "correct_answer": "false",
+      "explanation": "Ansible is agentless. For network devices, it connects via SSH (or HTTPS for some APIs) with no agent required on the managed device. This is a key differentiator from Puppet and Chef, which require agents."
+    },
+    {
+      "id": "ap_cloud_016",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "question": "Which NETCONF operation retrieves the current running configuration from a network device?",
+      "options": [
+        "<get-config>",
+        "<edit-config>",
+        "<commit>",
+        "<lock>"
+      ],
+      "correct_answer": "0",
+      "explanation": "<get-config> retrieves configuration data from a specific datastore (running, startup, or candidate). <edit-config> modifies the configuration. <commit> applies candidate config changes. <lock> prevents other sessions from modifying."
+    },
+    {
+      "id": "ap_cloud_017",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "hard",
+      "question": "In RESTCONF (RFC 8040), which HTTP method is used to create a new configuration resource that must not already exist?",
+      "options": [
+        "GET",
+        "PUT",
+        "POST",
+        "PATCH"
+      ],
+      "correct_answer": "2",
+      "explanation": "In RESTCONF: POST creates a new subordinate resource (fails if it already exists). PUT creates or replaces a resource entirely. PATCH partially modifies a resource. GET retrieves. This mirrors standard REST semantics."
+    },
+    {
+      "id": "ap_cloud_018",
+      "week": 6,
+      "domain": "Automation and Programmability",
+      "type": "multiple_choice",
+      "difficulty": "medium",
+      "question": "What is the primary role of Cisco DNA Center (Catalyst Center) in an enterprise network?",
+      "options": [
+        "A RADIUS server for 802.1X authentication",
+        "A centralised network management, automation, and analytics platform providing intent-based networking",
+        "A cloud-based firewall management system",
+        "A BGP route reflector for large-scale deployments"
+      ],
+      "correct_answer": "1",
+      "explanation": "Cisco DNA Center is an SDN controller providing: network design (topology, addressing), policy (segmentation via SGT), provisioning (zero-touch), and assurance (AI-driven analytics). It uses NETCONF/YANG to configure IOS-XE devices."
     }
   ]
 }

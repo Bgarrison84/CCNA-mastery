@@ -306,8 +306,11 @@ Work through pillars in order, one per session. Ask before moving to next pillar
 - [x] "The Breach" boss battle (boss_w5_the_breach, 15 questions, 350XP/150 perfect bonus); boss battles total now 7
 - [x] 56 new questions: AAA (5), ACLs (6), Threats (6), SSH/hardening (5), VPN/crypto (3), port security/L2 (4), ZBF (2), wireless security (3), IDS/IPS (2), cryptography basics (3), misc security (7), IP Services security (2), multi-select (3), drag-drop (3)
 
-### Pillar 3 — Cloud Training Module
-New section covering: IaaS/PaaS/SaaS responsibility matrix (interactive), cloud deployment models, virtual networking mapped to on-prem (VPC↔network, SG↔firewall, NACL↔ACL), AWS networking step-through (EC2 packet journey), SD-WAN/SASE, IaC comparison (Ansible/Terraform). 60+ new questions + "The Migration" Boss Battle.
+### Pillar 3 — Cloud Training Module *(done 2026-03-27)*
+- [x] `js/diagrams/cloud.js` — 4-tab interactive diagram: IaaS/PaaS/SaaS responsibility matrix (click column = model detail), Deployment Models (cards with pros/cons), Virtual Networking analogs (on-prem ↔ cloud clickable table), SD-WAN/SASE/Zero Trust cards
+- [x] Cloud reference section added to Reference view with diagramId: 'cloud'; IaaS/PaaS/SaaS summary table
+- [x] "The Migration" boss battle (boss_w6_the_migration, 15Q, 400XP/150 perfect bonus); boss battles total now 8
+- [x] 50 new questions: cloud service models (6), cloud networking/VPC (4), virtualisation/NFV (4), SD-WAN/SASE/ZTNA (3), Ansible (5), APIs/NETCONF/RESTCONF (6), SDN (3), IaC/Terraform (2), multi-select (3), drag-drop (3), misc cloud/automation (11); questions total now 4,232
 
 ### Pillar 4 — Practical Projects Mode
 New `renderProjects()` view — 6–8 multi-phase guided projects combining CLI labs + quiz checkpoints:

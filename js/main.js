@@ -4439,6 +4439,23 @@ function renderReference() {
       </div>`
     },
     {
+      id: 'cloud', title: '☁️ Cloud Computing', diagramId: 'cloud',
+      content: `<div class="text-xs text-gray-400 mb-3">
+        <span class="text-blue-300">IaaS</span> — rent compute/storage/network &nbsp;·&nbsp;
+        <span class="text-purple-300">PaaS</span> — deploy code, provider manages runtime &nbsp;·&nbsp;
+        <span class="text-green-300">SaaS</span> — consume the application
+      </div>` +
+      T(
+        ['Model','You Manage','Provider Manages','Examples'],
+        [
+          ['On-Prem','Everything','Nothing','Your own DC'],
+          ['IaaS','OS, runtime, apps','Servers, storage, network','AWS EC2, Azure VMs, GCP'],
+          ['PaaS','Applications only','OS, runtime, middleware','Heroku, App Service, Elastic Beanstalk'],
+          ['SaaS','Configuration only','Everything','Gmail, Salesforce, M365'],
+        ]
+      ) + `<div class="mt-2 text-xs text-gray-500">Use the interactive diagram above to explore service models, deployment types, virtual networking mappings, and SD-WAN/SASE.</div>`
+    },
+    {
       id: 'cli', title: 'CLI Command Quick-Reference',
       content: [
         ['Interfaces', [
@@ -4964,6 +4981,7 @@ const DIAGRAM_MODULES = {
   hsrp:       './js/diagrams/hsrp.js',
   snmp:       './js/diagrams/snmp.js',
   aaa:        './js/diagrams/aaa.js',
+  cloud:      './js/diagrams/cloud.js',
 };
 
 async function renderDiagram(diagramId, containerEl) {
