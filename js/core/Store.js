@@ -51,6 +51,7 @@ const DEFAULT_STATE = {
   completedProjects: {},   // { [projectId]: { completedPhases: [], xpEarned, startedAt, completedAt } }
   megaLabProgress: {},     // { [labId]: { completedPhases: [], xpEarned, hintsUsed, startedAt, completedAt } }
   badges: [],              // [{ id, name, icon, description, awardedAt }]
+  scriptingProgress: {},   // { [labId]: { completedAt } }
   lastSaved: null,
 };
 

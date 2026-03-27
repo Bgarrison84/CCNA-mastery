@@ -379,3 +379,34 @@ Large-scale, multi-concept, multi-phase CLI labs that simulate real enterprise s
 - New `renderMegaLabs()` view: dramatic card design, topology preview on hover, locked/unlocked state, badge showcase
 - Phase stepper UI: numbered phases across the top; completed = green, active = amber, locked = grey
 - Auto-save progress after each phase so the user can resume across sessions
+
+---
+
+## Phase 10 — Quality & Depth (planned 2026-03-27)
+Brainstormed improvements from session review. Work through in order, one per session.
+
+### High Value — Implement First
+1. [ ] **Confidence Rating System** — After selecting an MC answer, a 1–5 confidence slider appears before submitting. Tracked separately from correctness. SRS uses confidence × correctness to schedule reviews. Identifies "lucky guesses" (wrong=0pt, right+low-conf=0.5pt, right+high-conf=1pt). Store: `store.recordConfidence(id, rating)`.
+2. [ ] **Adaptive Difficulty Weighting** — After 20+ answers per domain, auto-adjust Grind pool to weight toward difficulty tiers the learner is struggling with (not just domains). Reads per-difficulty accuracy from domainStats. Toggle: "Smart difficulty" checkbox in Grind settings.
+3. [ ] **"Explain the Distractors"** — Wrong-answer feedback expands to include a second panel: "Why people pick this wrong option" — one sentence per distractor explaining the common misconception. Requires adding `distractor_notes: []` field to question schema (optional). Renders in Grind and Flashcard views.
+4. [ ] **Prerequisite Concept Links** — When a wrong answer is submitted, show a "Review this first →" link to the relevant Story Mode beat or Reference section. Map question `tags[]` to beat IDs via a PREREQ_MAP constant in main.js (e.g., `ospf: 'beat_w3_ospf'`).
+5. [ ] **Pomodoro Timer** — 25-min study timer in HUD (small icon button). Counts down in the header, triggers a 5-min break prompt. Records completed pomodoros in `store.state.pomodoroCount`. Study heatmap optionally shows pomodoros per day.
+
+### Medium Value
+6. [ ] **Custom Question Creator** — In Notebook view: a "Create Question" form (question text, 4 options, correct index, explanation, domain, week). Stores in `store.state.customQuestions[]`. Custom questions appear in Grind and Flashcard with a ✏️ badge. Can be exported in the notebook export.
+7. [ ] **Export to Anki** — "Export to Anki" button in Notebook view. Generates a `.txt` file in Anki import format (tab-separated: front \t back \t tags) for all flagged + mistake questions. Learners import into Anki desktop app for cross-platform SRS.
+8. [ ] **Session Quality Score** — End-of-session summary shows a 0–100 "Session Score" combining: accuracy (40%), SRS items reviewed (20%), new Qs attempted (20%), time-on-task (20%). Stored in `store.state.sessionHistory[]` (last 30 sessions). Shown as a sparkline on Stats screen.
+9. [ ] **Citation Panel** — In quiz explanation panel, show `source_ref` field (if present) as a "📖 Source" badge. On click, expands to full source text. Allows learners to jump to OCG chapter or Jeremy's IT Lab video reference directly.
+10. [ ] **Peer Study Export** — On Stats screen: "Share Progress" generates a formatted summary card (plain text): callsign, level, XP, accuracy %, streak, weak domains, exam readiness %. Copy to clipboard button. No server needed — for Discord/Reddit/group chat sharing.
+
+### Technical
+11. [ ] **Progressive content.json loading** — Split content.json into week chunks (week1.json … week6.json + meta.json for labs/bosses). Load meta.json immediately, lazy-load week chunks as the learner advances. Cuts initial load time from ~1.5MB to ~250KB for Week 1 users.
+12. [ ] **IndexedDB migration** — localStorage caps at 5–10MB; with 4,200+ questions and growing history, overflow is possible. Migrate `store._save()` to IndexedDB with localStorage as fallback. Keep the same API surface on Store — only the persistence layer changes.
+13. [ ] **Difficulty-adaptive question pool** — Extend QuizEngine to support a "smart" mode: maintain a sliding window of last-N accuracy per difficulty tier; weight question selection toward 60–70% target accuracy (the optimal challenge zone for retention).
+
+### Network Automation Scripting Module *(done 2026-03-27)*
+- [x] `js/engine/ScriptingEngine.js` — pattern-match validator for Python/bash labs; 10 check types; no external runtime required (100% offline)
+- [x] 10 scripting labs: Netmiko basics, config push, multi-device loop, show-output parsing, config backup, bash ping sweep, bash config backup, YAML inventory, error handling, RESTCONF API
+- [x] `renderScripting()` in main.js — 3-tab view (Labs / Theory / Quick Ref); code editor with syntax-aware placeholder; run + validate; per-check pass/fail feedback
+- [x] 40 new questions added (Network Automation domain): Netmiko/Paramiko, Ansible, Python basics for net, RESTCONF/NETCONF, Bash scripting, SSH/SCP automation
+- [x] Nav button "⌨ Scripting" added to sidebar; VIEW_LABELS entry; switchView case

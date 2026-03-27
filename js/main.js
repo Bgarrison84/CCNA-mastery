@@ -17,6 +17,7 @@ import { Terminal }    from './engine/Terminal.js';
 import { BossBattle }  from './engine/BossBattle.js';
 import { QuizEngine }  from './engine/QuizEngine.js';
 import { generateIPv4Problem, validateIPv4, buildChallenge, calculateVLSM, solveSubnet } from './engine/Subnetting.js';
+import { ScriptingEngine, py, sh } from './engine/ScriptingEngine.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -1112,6 +1113,7 @@ function switchView(view) {
     case 'inventory':renderInventory();break;
     case 'projects':  renderProjects();  break;
     case 'megalabs':  renderMegaLabs();  break;
+    case 'scripting': renderScripting(); break;
     default: break;
   }
 
@@ -6412,6 +6414,597 @@ function _checkMegaCompletion(lab) {
     store.addXP(Math.round(lab.xp * 0.15), `megalab_bonus:${lab.id}`);
     bus.emit('toast', { msg: `🏆 ${lab.badge.icon} Badge earned: ${lab.badge.name}!`, type: 'success' });
   }
+}
+
+// ─── Network Automation Scripting ─────────────────────────────────────────────
+
+const SCRIPTING_LABS = [
+  {
+    id: 'scr_netmiko_basic', title: 'Hello, Netmiko!', lang: 'python',
+    difficulty: 'easy', xp: 80, week: 6,
+    description: 'Write a Python script that connects to a Cisco router via Netmiko and runs <code>show ip interface brief</code>, then disconnects cleanly.',
+    objectives: [
+      'Import ConnectHandler from the netmiko library',
+      'Build a device dictionary with device_type, host, username, and password',
+      'Establish a connection using ConnectHandler(**device)',
+      'Send the show command and print the output',
+      'Call disconnect() when done',
+    ],
+    hints: ['device_type for Cisco IOS is "cisco_ios"', 'Use send_command() for show commands'],
+    template: `from netmiko import ConnectHandler\n\n# Define your device\ndevice = {\n    # fill in keys here\n}\n\n# Connect, run command, disconnect\n`,
+    checks: [
+      { label: 'Imports ConnectHandler from netmiko', test: py.importFrom('netmiko', 'ConnectHandler') },
+      { label: 'device dict has device_type key',     test: py.dictKey('device_type') },
+      { label: 'device dict has host key',            test: py.dictKey('host') },
+      { label: 'device dict has username key',        test: py.dictKey('username') },
+      { label: 'device dict has password key',        test: py.dictKey('password') },
+      { label: 'Calls ConnectHandler(**device)',       test: /ConnectHandler\s*\(\s*\*\*/ },
+      { label: 'Sends show ip interface brief',       test: /send_command\s*\(\s*['"]show ip interface brief['"]\s*\)/ },
+      { label: 'Calls disconnect()',                  test: py.methodCall('disconnect') },
+    ],
+  },
+  {
+    id: 'scr_config_push', title: 'Push Config Commands', lang: 'python',
+    difficulty: 'easy', xp: 90, week: 6,
+    description: 'Write a Python script that uses Netmiko to push a list of configuration commands to a router using <code>send_config_set()</code>.',
+    objectives: [
+      'Build a list of IOS configuration commands',
+      'Connect to the device with ConnectHandler',
+      'Push the commands with send_config_set()',
+      'Print the output and disconnect',
+    ],
+    hints: ['send_config_set() accepts a Python list of command strings', 'It automatically enters and exits config mode'],
+    template: `from netmiko import ConnectHandler\n\ndevice = {\n    'device_type': 'cisco_ios',\n    'host': '10.0.0.1',\n    'username': 'admin',\n    'password': 'cisco',\n}\n\nconfig_commands = [\n    # add your IOS commands here\n]\n\n# connect and push\n`,
+    checks: [
+      { label: 'Imports ConnectHandler',              test: py.importFrom('netmiko', 'ConnectHandler') },
+      { label: 'config_commands is a list',           test: /config_commands\s*=\s*\[/ },
+      { label: 'List contains at least one command',  test: /config_commands\s*=\s*\[[^\]]+\]/ },
+      { label: 'Calls ConnectHandler(**device)',       test: /ConnectHandler\s*\(\s*\*\*/ },
+      { label: 'Uses send_config_set()',              test: py.methodCall('send_config_set') },
+      { label: 'Calls disconnect()',                  test: py.methodCall('disconnect') },
+    ],
+  },
+  {
+    id: 'scr_multi_device', title: 'Loop Over Multiple Devices', lang: 'python',
+    difficulty: 'medium', xp: 110, week: 6,
+    description: 'Write a Python script that connects to a list of devices, runs <code>show version</code> on each, and prints the hostname + first 50 characters of output.',
+    objectives: [
+      'Define a list of two or more device dictionaries',
+      'Use a for loop to iterate over the list',
+      'Connect to each device and run show version',
+      'Print the host IP and a snippet of output',
+      'Disconnect after each device',
+    ],
+    hints: ['Use a list of dicts: devices = [{...}, {...}]', 'Access host with device["host"]', 'f-strings make formatting easy'],
+    template: `from netmiko import ConnectHandler\n\ndevices = [\n    # add device dicts here\n]\n\nfor device in devices:\n    # connect, run, print, disconnect\n    pass\n`,
+    checks: [
+      { label: 'Imports ConnectHandler',              test: py.importFrom('netmiko', 'ConnectHandler') },
+      { label: 'devices is a list of dicts',          test: /devices\s*=\s*\[/ },
+      { label: 'for loop over devices',               test: /for\s+\w+\s+in\s+devices/ },
+      { label: 'Sends show version',                  test: /send_command\s*\(\s*['"]show version['"]\s*\)/ },
+      { label: 'Prints output (f-string or format)',  test: /print\s*\(/ },
+      { label: 'Calls disconnect() inside loop',      test: py.methodCall('disconnect') },
+    ],
+  },
+  {
+    id: 'scr_parse_routes', title: 'Parse Show IP Route', lang: 'python',
+    difficulty: 'medium', xp: 130, week: 6,
+    description: 'Write a script that fetches <code>show ip route</code> and uses the <code>re</code> module to extract all Connected (C) network prefixes, printing each one.',
+    objectives: [
+      'Import the re module',
+      'Run show ip route via Netmiko',
+      'Split the output into lines',
+      'Use re.search() with an IP/prefix pattern to extract prefixes from "C" lines',
+      'Print each matched prefix',
+    ],
+    hints: ['Lines for connected routes start with "C"', 'Pattern r"(\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)" matches prefixes', 'Use .splitlines() to iterate lines'],
+    template: `import re\nfrom netmiko import ConnectHandler\n\ndevice = {\n    'device_type': 'cisco_ios',\n    'host': '10.0.0.1',\n    'username': 'admin',\n    'password': 'cisco',\n}\n\n# connect, fetch route table, parse connected routes\n`,
+    checks: [
+      { label: 'Imports re module',                   test: py.imports('re') },
+      { label: 'Imports ConnectHandler',              test: py.importFrom('netmiko', 'ConnectHandler') },
+      { label: 'Runs show ip route',                  test: /send_command\s*\(\s*['"]show ip route['"]\s*\)/ },
+      { label: 'Splits output into lines',            test: /\.splitlines\(\)|\.split\s*\(\s*['"]\\n['"]\s*\)/ },
+      { label: 'Uses re.search or re.findall',        test: py.regex() },
+      { label: 'Checks for connected (C) lines',      test: /['"]\s*C\s*['"]|startswith\s*\(\s*['"]C['"]/ },
+      { label: 'Calls disconnect()',                  test: py.methodCall('disconnect') },
+    ],
+  },
+  {
+    id: 'scr_backup_python', title: 'Config Backup to File', lang: 'python',
+    difficulty: 'medium', xp: 120, week: 6,
+    description: 'Write a script that connects to a list of routers, fetches <code>show running-config</code>, and saves each config to a timestamped file like <code>backup_10.0.0.1_20260327.txt</code>.',
+    objectives: [
+      'Import datetime for timestamping',
+      'Loop over a list of device hosts',
+      'Fetch show running-config from each device',
+      'Build a timestamped filename using the host IP and today\'s date',
+      'Write the config to a file using open() in write mode',
+    ],
+    hints: ['datetime.datetime.now().strftime("%Y%m%d") gives YYYYMMDD', 'Use open(filename, "w") as f: f.write(config)'],
+    template: `from netmiko import ConnectHandler\nimport datetime\n\ndevices = ['10.0.0.1', '10.0.0.2']\n\nfor host in devices:\n    device = {'device_type': 'cisco_ios', 'host': host, 'username': 'admin', 'password': 'cisco'}\n    # connect, get config, save to file, disconnect\n    pass\n`,
+    checks: [
+      { label: 'Imports datetime',                    test: py.imports('datetime') },
+      { label: 'Imports ConnectHandler',              test: py.importFrom('netmiko', 'ConnectHandler') },
+      { label: 'Fetches show running-config',         test: /send_command\s*\(\s*['"]show running-config['"]\s*\)/ },
+      { label: 'Uses datetime for timestamp',         test: /datetime.*strftime|strftime.*datetime/ },
+      { label: 'Opens file in write mode',            test: /open\s*\(.*,\s*['"]w['"]\s*\)/ },
+      { label: 'Writes config to file',               test: /\.write\s*\(/ },
+      { label: 'Calls disconnect()',                  test: py.methodCall('disconnect') },
+    ],
+  },
+  {
+    id: 'scr_bash_backup', title: 'Bash Config Backup', lang: 'bash',
+    difficulty: 'easy', xp: 80, week: 6,
+    description: 'Write a Bash script that loops over an array of router IPs, SSHs into each, runs <code>show running-config</code>, and saves the output to a dated <code>.txt</code> file.',
+    objectives: [
+      'Include a proper Bash shebang (#!/bin/bash)',
+      'Define an array of host IP addresses',
+      'Capture today\'s date in a variable',
+      'Loop over the array using a for loop',
+      'Use ssh to run the show command and redirect output to a file',
+    ],
+    hints: ['HOSTS=("10.0.0.1" "10.0.0.2") defines an array', 'DATE=$(date +%Y%m%d) captures the date', 'Redirect with > filename.txt'],
+    template: `#!/bin/bash\n\nHOSTS=("10.0.0.1" "10.0.0.2")\nUSERNAME="admin"\n\n# Loop, SSH, save config\n`,
+    checks: [
+      { label: 'Has #!/bin/bash shebang',             test: sh.shebang() },
+      { label: 'Defines array of hosts',              test: sh.array() },
+      { label: 'Captures date in variable',           test: sh.dateCmd() },
+      { label: 'Uses a for loop over hosts',          test: sh.forLoop() },
+      { label: 'Uses ssh command',                    test: sh.sshCmd() },
+      { label: 'Redirects output to a .txt file',     test: sh.redirect() },
+    ],
+  },
+  {
+    id: 'scr_bash_ping', title: 'Bash Ping Sweep', lang: 'bash',
+    difficulty: 'easy', xp: 70, week: 6,
+    description: 'Write a Bash script that sweeps all 254 host addresses in a /24 subnet, pinging each once, and prints "X.X.X.X is UP" for hosts that respond.',
+    objectives: [
+      'Include the Bash shebang',
+      'Use a for loop with seq or brace expansion to iterate 1–254',
+      'Run ping with -c 1 (single packet) per host',
+      'Redirect ping output to /dev/null',
+      'Check exit code with $? and print "is UP" for live hosts',
+    ],
+    hints: ['for i in $(seq 1 254) loops 1 to 254', 'ping -c 1 -W 1 $IP sends one packet with 1s timeout', '[ $? -eq 0 ] checks if the last command succeeded'],
+    template: `#!/bin/bash\n\nSUBNET="192.168.1"\n\n# Sweep all 254 addresses\n`,
+    checks: [
+      { label: 'Has #!/bin/bash shebang',             test: sh.shebang() },
+      { label: 'For loop over 1-254 range',           test: sh.seqRange() },
+      { label: 'Uses ping with -c flag',              test: sh.pingCmd() },
+      { label: 'Redirects to /dev/null',              test: sh.nullRedir() },
+      { label: 'Checks exit code ($?)',               test: /\$\?/ },
+      { label: 'Prints "is UP" for live hosts',       test: /is UP/ },
+    ],
+  },
+  {
+    id: 'scr_yaml_inventory', title: 'Read Ansible YAML Inventory', lang: 'python',
+    difficulty: 'medium', xp: 100, week: 6,
+    description: 'Write a Python script that loads a YAML inventory file, iterates over hosts in the <code>routers</code> group, and prints each hostname and its <code>ansible_host</code> IP.',
+    objectives: [
+      'Import the yaml module',
+      'Open and read an inventory.yaml file',
+      'Parse it with yaml.safe_load()',
+      'Loop over the routers group hosts',
+      'Print hostname and ansible_host value for each',
+    ],
+    hints: ['yaml.safe_load(f) parses YAML into a Python dict', 'Access nested keys with .get() or ["key"]', 'Loop with: for hostname, vars in hosts.items()'],
+    template: `import yaml\n\nwith open('inventory.yaml', 'r') as f:\n    inventory = yaml.safe_load(f)\n\n# Iterate over routers group and print each host\n`,
+    checks: [
+      { label: 'Imports yaml',                        test: py.imports('yaml') },
+      { label: 'Opens inventory.yaml file',           test: /open\s*\(\s*['"]inventory\.yaml['"]/ },
+      { label: 'Uses yaml.safe_load()',               test: /yaml\.safe_load\s*\(/ },
+      { label: 'Iterates with .items()',              test: py.methodCall('items') },
+      { label: 'Accesses ansible_host field',         test: /['"]ansible_host['"]/ },
+      { label: 'Prints hostname and IP',              test: /print\s*\(/ },
+    ],
+  },
+  {
+    id: 'scr_error_handling', title: 'Netmiko + Error Handling', lang: 'python',
+    difficulty: 'hard', xp: 150, week: 6,
+    description: 'Write a robust script that connects to multiple devices, handles <code>NetmikoTimeoutException</code> and <code>NetmikoAuthenticationException</code> separately, and stores results (or error codes) in a dict.',
+    objectives: [
+      'Import both NetmikoTimeoutException and NetmikoAuthenticationException',
+      'Use a try/except block around the connection and command',
+      'Catch timeout errors and store "TIMEOUT" in results',
+      'Catch auth errors and store "AUTH_FAILED" in results',
+      'Print all results after the loop',
+    ],
+    hints: ['from netmiko.exceptions import NetmikoTimeoutException, NetmikoAuthenticationException', 'results = {} before the loop; results[host] = ... inside'],
+    template: `from netmiko import ConnectHandler\nfrom netmiko.exceptions import NetmikoTimeoutException, NetmikoAuthenticationException\n\ndevices = [\n    {'device_type': 'cisco_ios', 'host': '10.0.0.1', 'username': 'admin', 'password': 'cisco'},\n    {'device_type': 'cisco_ios', 'host': '10.0.0.99', 'username': 'admin', 'password': 'wrong'},\n]\n\nresults = {}\n# loop, try/except, store results\n`,
+    checks: [
+      { label: 'Imports NetmikoTimeoutException',     test: /NetmikoTimeoutException/ },
+      { label: 'Imports NetmikoAuthenticationException', test: /NetmikoAuthenticationException/ },
+      { label: 'Has try block',                       test: py.tryExcept() },
+      { label: 'Catches timeout',                     test: /except\s+NetmikoTimeoutException/ },
+      { label: 'Catches auth failure',                test: /except\s+NetmikoAuthenticationException/ },
+      { label: 'Stores results in a dict',            test: /results\s*\[/ },
+      { label: 'Calls disconnect() in try block',     test: py.methodCall('disconnect') },
+    ],
+  },
+  {
+    id: 'scr_restconf', title: 'RESTCONF API Call', lang: 'python',
+    difficulty: 'hard', xp: 160, week: 6,
+    description: 'Write a Python script that queries a router\'s RESTCONF API to list all interfaces. Use the correct Accept header, check the status code, and parse the JSON response.',
+    objectives: [
+      'Import the requests library',
+      'Set Accept and Content-Type headers to application/yang-data+json',
+      'Build the RESTCONF URL (path: /restconf/data/ietf-interfaces:interfaces)',
+      'Use requests.get() with headers and auth parameters',
+      'Check response.status_code == 200 before parsing',
+      'Parse the JSON and print interface names',
+    ],
+    hints: ['requests.get(url, headers=headers, auth=(user, pass), verify=False)', 'RESTCONF uses yang-data+json content type', 'response.json() gives a Python dict'],
+    template: `import requests\n\nheaders = {\n    'Accept': 'application/yang-data+json',\n    'Content-Type': 'application/yang-data+json',\n}\n\nurl = 'https://10.0.0.1/restconf/data/ietf-interfaces:interfaces'\n\n# make the request, check status, parse JSON, print interface names\n`,
+    checks: [
+      { label: 'Imports requests',                    test: py.imports('requests') },
+      { label: 'Sets yang-data+json Accept header',   test: /yang-data\+json/ },
+      { label: 'Uses RESTCONF data path',             test: /restconf\/data/ },
+      { label: 'Uses requests.get()',                 test: /requests\.get\s*\(/ },
+      { label: 'Passes auth parameter',               test: /auth\s*=/ },
+      { label: 'Checks status code',                  test: /status_code/ },
+      { label: 'Calls response.json()',               test: /\.json\s*\(\s*\)/ },
+    ],
+  },
+];
+
+// Theory reference panels
+const SCRIPTING_THEORY = [
+  {
+    title: 'Netmiko Essentials',
+    icon: '🔌',
+    content: `<div class="space-y-3 text-xs">
+<p class="text-gray-400">Netmiko is a Python library built on Paramiko that simplifies SSH connections to network devices. It handles the IOS prompt detection so you don't have to.</p>
+<div class="bg-black/40 rounded p-3 font-mono text-green-300 space-y-1">
+<div class="text-gray-500"># Install: pip install netmiko</div>
+<div>from netmiko import ConnectHandler</div>
+<div>&nbsp;</div>
+<div>device = {</div>
+<div>&nbsp;&nbsp;'device_type': 'cisco_ios',   <span class="text-gray-500"># cisco_ios | cisco_nxos | juniper | arista_eos</span></div>
+<div>&nbsp;&nbsp;'host':        '192.168.1.1',</div>
+<div>&nbsp;&nbsp;'username':    'admin',</div>
+<div>&nbsp;&nbsp;'password':    'cisco',</div>
+<div>&nbsp;&nbsp;'port':        22,             <span class="text-gray-500"># optional, default 22</span></div>
+<div>}</div>
+<div>&nbsp;</div>
+<div>net_connect = ConnectHandler(**device)</div>
+<div>output = net_connect.send_command('show ip route')   <span class="text-gray-500"># show commands</span></div>
+<div>net_connect.send_config_set(['int gi0/0', 'no shut']) <span class="text-gray-500"># config commands</span></div>
+<div>net_connect.save_config()                            <span class="text-gray-500"># write mem</span></div>
+<div>net_connect.disconnect()</div>
+</div>
+<p class="text-amber-400">Common device_type values: cisco_ios · cisco_nxos · cisco_asa · cisco_xr · juniper · arista_eos · linux</p>
+</div>`,
+  },
+  {
+    title: 'Python for Network Engineers',
+    icon: '🐍',
+    content: `<div class="space-y-3 text-xs">
+<p class="text-gray-400">You only need a small Python subset for most network automation tasks.</p>
+<div class="bg-black/40 rounded p-3 font-mono text-green-300 space-y-1">
+<div class="text-gray-500"># f-strings (format output)</div>
+<div>print(f"Host: {device['host']} - Status: {status}")</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># list comprehension (filter devices)</div>
+<div>ios_devices = [d for d in devices if d['device_type'] == 'cisco_ios']</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># dict for results</div>
+<div>results = {}  <span class="text-gray-600">→</span>  results['10.0.0.1'] = 'UP'</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># file I/O</div>
+<div>with open('backup.txt', 'w') as f:</div>
+<div>&nbsp;&nbsp;f.write(running_config)</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># error handling</div>
+<div>try:</div>
+<div>&nbsp;&nbsp;conn = ConnectHandler(**device)</div>
+<div>except NetmikoTimeoutException:</div>
+<div>&nbsp;&nbsp;print(f"{device['host']}: UNREACHABLE")</div>
+</div>
+</div>`,
+  },
+  {
+    title: 'Bash for Network Ops',
+    icon: '🖥️',
+    content: `<div class="space-y-3 text-xs">
+<p class="text-gray-400">Bash scripts automate repetitive SSH-based tasks: ping sweeps, config backups, log collection.</p>
+<div class="bg-black/40 rounded p-3 font-mono text-green-300 space-y-1">
+<div>#!/bin/bash</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># Arrays</div>
+<div>HOSTS=("10.0.0.1" "10.0.0.2" "10.0.0.3")</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># Loop over array</div>
+<div>for HOST in "${HOSTS[@]}"; do</div>
+<div>&nbsp;&nbsp;echo "Checking $HOST..."</div>
+<div>done</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># Ping check + exit code</div>
+<div>ping -c 1 -W 1 $HOST &gt; /dev/null 2&gt;&amp;1</div>
+<div>if [ $? -eq 0 ]; then echo "$HOST UP"; fi</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># SSH + redirect to file</div>
+<div>ssh admin@$HOST "show run" &gt; backup_${HOST}.txt</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># Date stamp</div>
+<div>DATE=$(date +%Y%m%d)  <span class="text-gray-600">→</span>  20260327</div>
+</div>
+</div>`,
+  },
+  {
+    title: 'RESTCONF & NETCONF',
+    icon: '🌐',
+    content: `<div class="space-y-3 text-xs">
+<p class="text-gray-400">Model-driven programmability interfaces supported on modern IOS-XE / NX-OS / IOS-XR.</p>
+<div class="bg-black/40 rounded p-3 font-mono text-green-300 space-y-1">
+<div class="text-gray-500"># RESTCONF (HTTP/HTTPS, RFC 8040)</div>
+<div>import requests</div>
+<div>headers = {'Accept': 'application/yang-data+json'}</div>
+<div>url = 'https://device/restconf/data/ietf-interfaces:interfaces'</div>
+<div>r = requests.get(url, headers=headers, auth=('admin','cisco'), verify=False)</div>
+<div>data = r.json()</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># NETCONF (SSH, RFC 6241) — ncclient library</div>
+<div>from ncclient import manager</div>
+<div>m = manager.connect(host='10.0.0.1', port=830,</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;username='admin', password='cisco',</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;hostkey_verify=False)</div>
+<div>config = m.get_config(source='running')</div>
+</div>
+<table class="w-full text-xs border-collapse mt-2">
+<tr class="border-b border-gray-700"><th class="text-left text-gray-400 py-1 pr-3">Feature</th><th class="text-left text-gray-400">RESTCONF</th><th class="text-left text-gray-400">NETCONF</th></tr>
+<tr class="border-b border-gray-800"><td class="py-1 pr-3 text-gray-300">Transport</td><td>HTTPS</td><td>SSH (port 830)</td></tr>
+<tr class="border-b border-gray-800"><td class="py-1 pr-3 text-gray-300">Data format</td><td>JSON / XML</td><td>XML only</td></tr>
+<tr class="border-b border-gray-800"><td class="py-1 pr-3 text-gray-300">Operations</td><td>GET/POST/PUT/DELETE</td><td>get/get-config/edit-config</td></tr>
+<tr><td class="py-1 pr-3 text-gray-300">YANG models</td><td>Yes</td><td>Yes</td></tr>
+</table>
+</div>`,
+  },
+  {
+    title: 'Ansible for Network',
+    icon: '⚙️',
+    content: `<div class="space-y-3 text-xs">
+<p class="text-gray-400">Ansible is agentless — it uses SSH (or NETCONF/RESTCONF) to configure devices. No software installed on routers.</p>
+<div class="bg-black/40 rounded p-3 font-mono text-green-300 space-y-1">
+<div class="text-gray-500"># inventory.yaml</div>
+<div>routers:</div>
+<div>&nbsp;&nbsp;hosts:</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;R1:</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ansible_host: 10.0.0.1</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ansible_network_os: ios</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;R2:</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ansible_host: 10.0.0.2</div>
+<div>&nbsp;</div>
+<div class="text-gray-500"># playbook.yaml</div>
+<div>- name: Configure OSPF</div>
+<div>&nbsp;&nbsp;hosts: routers</div>
+<div>&nbsp;&nbsp;gather_facts: no</div>
+<div>&nbsp;&nbsp;tasks:</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;- name: Enable OSPF</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cisco.ios.ios_config:</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lines:</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- router ospf 1</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- network 0.0.0.0 255.255.255.255 area 0</div>
+</div>
+<p class="text-amber-400">Key CCNA exam facts: agentless (no agent on devices), uses YAML playbooks, idempotent (safe to run multiple times), uses collections (cisco.ios, cisco.nxos, junipernetworks.junos)</p>
+</div>`,
+  },
+];
+
+let _scriptingLabId = null;
+
+function renderScripting() {
+  const view = getView();
+  const prog = store.state.scriptingProgress || {};
+
+  view.innerHTML = `
+    <div class="space-y-4">
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-green-300">Network Automation Scripting</h2>
+          <p class="text-xs text-gray-400 mt-0.5">10 labs · Python + Bash · Netmiko · RESTCONF · Ansible</p>
+        </div>
+        <div class="text-xs text-gray-500 text-right">
+          ${Object.keys(prog).length}/${SCRIPTING_LABS.length} labs done
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-2 border-b border-gray-800 pb-0">
+        <button id="scr-tab-labs"   class="scr-tab px-3 py-1.5 text-xs font-semibold rounded-t border border-gray-700 bg-green-900/30 text-green-300">💻 Labs</button>
+        <button id="scr-tab-theory" class="scr-tab px-3 py-1.5 text-xs font-semibold rounded-t border border-gray-800 text-gray-400 hover:text-gray-200">📖 Theory</button>
+      </div>
+
+      <!-- Labs panel -->
+      <div id="scr-panel-labs" class="space-y-2">
+        ${SCRIPTING_LABS.map(lab => {
+          const done  = !!prog[lab.id];
+          const dColor = { easy: 'text-green-400', medium: 'text-amber-400', hard: 'text-red-400' }[lab.difficulty] || 'text-gray-400';
+          const langBadge = lab.lang === 'python'
+            ? `<span class="px-1.5 py-0.5 rounded text-xs bg-blue-900/40 text-blue-300 border border-blue-800">Python</span>`
+            : `<span class="px-1.5 py-0.5 rounded text-xs bg-yellow-900/40 text-yellow-300 border border-yellow-800">Bash</span>`;
+          return `
+            <div class="rounded border ${done ? 'border-green-800/60 bg-green-950/20' : 'border-gray-700 bg-gray-900/40'} p-3 flex items-center justify-between gap-3 cursor-pointer hover:border-green-700/60 transition-colors scr-lab-card" data-lab-id="${lab.id}">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  ${done ? '<span class="text-green-400 text-sm">✓</span>' : '<span class="text-gray-600 text-sm">○</span>'}
+                  <span class="text-sm font-semibold ${done ? 'text-green-300' : 'text-white'}">${lab.title}</span>
+                  ${langBadge}
+                  <span class="text-xs ${dColor}">${lab.difficulty}</span>
+                </div>
+                <p class="text-xs text-gray-400 mt-0.5 ml-5">${lab.description.replace(/<[^>]+>/g, '')}</p>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-xs text-amber-400 font-semibold">+${lab.xp} XP</div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+
+      <!-- Theory panel (hidden by default) -->
+      <div id="scr-panel-theory" class="hidden space-y-3">
+        ${SCRIPTING_THEORY.map((section, i) => `
+          <div class="rounded border border-gray-700 overflow-hidden">
+            <button class="w-full flex items-center justify-between px-4 py-3 text-left bg-gray-900/60 hover:bg-gray-800/60 scr-theory-toggle" data-idx="${i}">
+              <span class="font-semibold text-sm text-green-300">${section.icon} ${section.title}</span>
+              <span class="text-gray-500 text-xs scr-caret-${i}">▶</span>
+            </button>
+            <div id="scr-theory-body-${i}" class="hidden px-4 py-3 bg-black/20">${section.content}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Lab detail container -->
+      <div id="scr-lab-detail"></div>
+    </div>`;
+
+  // Tab switching
+  view.querySelector('#scr-tab-labs').addEventListener('click', () => {
+    view.querySelector('#scr-panel-labs').classList.remove('hidden');
+    view.querySelector('#scr-panel-theory').classList.add('hidden');
+    view.querySelector('#scr-tab-labs').className   = 'scr-tab px-3 py-1.5 text-xs font-semibold rounded-t border border-gray-700 bg-green-900/30 text-green-300';
+    view.querySelector('#scr-tab-theory').className = 'scr-tab px-3 py-1.5 text-xs font-semibold rounded-t border border-gray-800 text-gray-400 hover:text-gray-200';
+  });
+  view.querySelector('#scr-tab-theory').addEventListener('click', () => {
+    view.querySelector('#scr-panel-labs').classList.add('hidden');
+    view.querySelector('#scr-panel-theory').classList.remove('hidden');
+    view.querySelector('#scr-tab-theory').className = 'scr-tab px-3 py-1.5 text-xs font-semibold rounded-t border border-gray-700 bg-green-900/30 text-green-300';
+    view.querySelector('#scr-tab-labs').className   = 'scr-tab px-3 py-1.5 text-xs font-semibold rounded-t border border-gray-800 text-gray-400 hover:text-gray-200';
+  });
+
+  // Theory accordion
+  view.querySelectorAll('.scr-theory-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx  = btn.dataset.idx;
+      const body = view.querySelector(`#scr-theory-body-${idx}`);
+      const caret = view.querySelector(`.scr-caret-${idx}`);
+      const open = !body.classList.contains('hidden');
+      body.classList.toggle('hidden', open);
+      caret.textContent = open ? '▶' : '▼';
+    });
+  });
+
+  // Lab cards
+  view.querySelectorAll('.scr-lab-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const lab = SCRIPTING_LABS.find(l => l.id === card.dataset.labId);
+      if (lab) _renderScriptingLab(lab);
+    });
+  });
+}
+
+function _renderScriptingLab(lab) {
+  _scriptingLabId = lab.id;
+  const detail    = getView().querySelector('#scr-lab-detail');
+  const done      = !!(store.state.scriptingProgress || {})[lab.id];
+
+  detail.innerHTML = `
+    <div class="rounded border border-green-900/50 bg-gray-950 overflow-hidden">
+      <!-- Lab header -->
+      <div class="flex items-center justify-between px-4 py-3 bg-gray-900/60 border-b border-gray-800">
+        <div>
+          <span class="text-green-300 font-bold text-sm">${lab.title}</span>
+          <span class="ml-2 text-xs ${lab.lang === 'python' ? 'text-blue-300' : 'text-yellow-300'}">${lab.lang === 'python' ? 'Python' : 'Bash'}</span>
+          <span class="ml-1 text-xs text-gray-500">· +${lab.xp} XP</span>
+        </div>
+        ${done ? '<span class="text-green-400 text-xs font-semibold">✓ COMPLETED</span>' : ''}
+      </div>
+
+      <div class="p-4 space-y-4">
+        <!-- Description -->
+        <p class="text-sm text-gray-300">${lab.description}</p>
+
+        <!-- Objectives -->
+        <div>
+          <div class="text-xs font-semibold text-green-400 mb-1">Objectives</div>
+          <ul class="space-y-0.5">
+            ${lab.objectives.map(o => `<li class="text-xs text-gray-300 flex gap-2"><span class="text-gray-600 shrink-0">▸</span>${o}</li>`).join('')}
+          </ul>
+        </div>
+
+        <!-- Hints accordion -->
+        <div>
+          <button id="scr-hints-toggle" class="text-xs text-amber-400 hover:text-amber-300">💡 Show hints (−25 XP)</button>
+          <div id="scr-hints-body" class="hidden mt-1 space-y-0.5">
+            ${lab.hints.map(h => `<p class="text-xs text-amber-200/80 pl-3 border-l border-amber-900">💡 ${h}</p>`).join('')}
+          </div>
+        </div>
+
+        <!-- Code editor -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs text-gray-400">${lab.lang === 'python' ? '🐍 Python editor' : '🖥️ Bash editor'}</span>
+            <button id="scr-reset-btn" class="text-xs text-gray-600 hover:text-gray-400">↺ Reset</button>
+          </div>
+          <textarea id="scr-code-editor"
+            class="w-full h-52 bg-black text-green-300 font-mono text-xs p-3 rounded border border-gray-700 focus:border-green-700 focus:outline-none resize-y"
+            spellcheck="false"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            placeholder="${lab.lang === 'python' ? '# Write your Python script here' : '#!/bin/bash\n# Write your Bash script here'}"
+          >${done ? '' : lab.template}</textarea>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="flex gap-2 flex-wrap">
+          <button id="scr-run-btn" class="px-4 py-2 text-xs font-semibold bg-green-800 hover:bg-green-700 text-green-100 rounded border border-green-700">▶ Run &amp; Validate</button>
+        </div>
+
+        <!-- Feedback -->
+        <div id="scr-feedback" class="hidden rounded border border-gray-700 bg-black/40 p-3 space-y-1"></div>
+      </div>
+    </div>`;
+
+  detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Hints
+  let hintsRevealed = false;
+  detail.querySelector('#scr-hints-toggle').addEventListener('click', () => {
+    if (!hintsRevealed) { store.spendXP(25); hintsRevealed = true; }
+    detail.querySelector('#scr-hints-body').classList.toggle('hidden');
+  });
+
+  // Reset
+  detail.querySelector('#scr-reset-btn').addEventListener('click', () => {
+    detail.querySelector('#scr-code-editor').value = lab.template;
+    detail.querySelector('#scr-feedback').classList.add('hidden');
+  });
+
+  // Run & Validate
+  detail.querySelector('#scr-run-btn').addEventListener('click', () => {
+    const code   = detail.querySelector('#scr-code-editor').value;
+    const result = ScriptingEngine.validate(code, lab.checks);
+    const fb     = detail.querySelector('#scr-feedback');
+
+    fb.classList.remove('hidden');
+    fb.innerHTML = result.checks.map(c =>
+      `<div class="${c.pass ? 'text-green-400' : 'text-red-400'} text-xs">${c.pass ? '✓' : '✗'} ${c.label}</div>`
+    ).join('') + `
+      <div class="mt-2 pt-2 border-t border-gray-800 text-xs ${result.pass ? 'text-green-300' : 'text-amber-300'} font-semibold">
+        ${result.pass
+          ? `✅ Lab complete — +${lab.xp} XP awarded!`
+          : `${result.score}% — ${result.checks.filter(c => !c.pass).length} check(s) remaining`}
+      </div>`;
+
+    if (result.pass) {
+      if (!store.state.scriptingProgress) store.state.scriptingProgress = {};
+      if (!store.state.scriptingProgress[lab.id]) {
+        store.state.scriptingProgress[lab.id] = { completedAt: Date.now() };
+        store.addXP(lab.xp, `scripting:${lab.id}`);
+        store._save();
+        // Refresh the lab card to show ✓
+        const card = getView().querySelector(`[data-lab-id="${lab.id}"]`);
+        if (card) {
+          card.classList.add('border-green-800/60', 'bg-green-950/20');
+          card.classList.remove('border-gray-700');
+          card.querySelector('span.text-gray-600')?.replaceWith((() => { const s = document.createElement('span'); s.className='text-green-400 text-sm'; s.textContent='✓'; return s; })());
+        }
+        // Update count
+        const countEl = getView().querySelector('.text-gray-500.text-right');
+        if (countEl) countEl.textContent = `${Object.keys(store.state.scriptingProgress).length}/${SCRIPTING_LABS.length} labs done`;
+      }
+    }
+  });
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
