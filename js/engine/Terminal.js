@@ -27,17 +27,25 @@ const MODE = {
   ROUTER_CONFIG:    'ROUTER_CONFIG',
   ACL_CONFIG:       'ACL_CONFIG',
   DHCP_CONFIG:      'DHCP_CONFIG',
+  ZONE_CONFIG:      'ZONE_CONFIG',
+  CLASS_MAP_CONFIG: 'CLASS_MAP_CONFIG',
+  POLICY_MAP_CONFIG:'POLICY_MAP_CONFIG',
+  ZONE_PAIR_CONFIG: 'ZONE_PAIR_CONFIG',
 };
 
 const PROMPT_FN = {
-  [MODE.USER_EXEC]:        (h)      => `${h}>`,
-  [MODE.PRIVILEGED_EXEC]:  (h)      => `${h}#`,
-  [MODE.GLOBAL_CONFIG]:    (h)      => `${h}(config)#`,
-  [MODE.INTERFACE_CONFIG]: (h)      => `${h}(config-if)#`,
-  [MODE.LINE_CONFIG]:      (h)      => `${h}(config-line)#`,
-  [MODE.ROUTER_CONFIG]:    (h)      => `${h}(config-router)#`,
-  [MODE.ACL_CONFIG]:       (h, ctx) => `${h}(config-${ctx.aclType === 'standard' ? 'std' : 'ext'}-nacl)#`,
-  [MODE.DHCP_CONFIG]:      (h, ctx) => `${h}(dhcp-config)#`,
+  [MODE.USER_EXEC]:         (h)      => `${h}>`,
+  [MODE.PRIVILEGED_EXEC]:   (h)      => `${h}#`,
+  [MODE.GLOBAL_CONFIG]:     (h)      => `${h}(config)#`,
+  [MODE.INTERFACE_CONFIG]:  (h)      => `${h}(config-if)#`,
+  [MODE.LINE_CONFIG]:       (h)      => `${h}(config-line)#`,
+  [MODE.ROUTER_CONFIG]:     (h)      => `${h}(config-router)#`,
+  [MODE.ACL_CONFIG]:        (h, ctx) => `${h}(config-${ctx.aclType === 'standard' ? 'std' : 'ext'}-nacl)#`,
+  [MODE.DHCP_CONFIG]:       (h, ctx) => `${h}(dhcp-config)#`,
+  [MODE.ZONE_CONFIG]:       (h, ctx) => `${h}(config-sec-zone)#`,
+  [MODE.CLASS_MAP_CONFIG]:  (h, ctx) => `${h}(config-cmap)#`,
+  [MODE.POLICY_MAP_CONFIG]: (h, ctx) => `${h}(config-pmap)#`,
+  [MODE.ZONE_PAIR_CONFIG]:  (h, ctx) => `${h}(config-sec-zone-pair)#`,
 };
 
 // ─── Running Config Data Model ────────────────────────────────────────────────
@@ -65,6 +73,12 @@ function makeBlankConfig(hostname = 'Router') {
     ipv6Routing: false,
     spanning_tree: { mode: 'pvst', vlanPriority: {} }, // vlanPriority: { vlanId: priority }
     nat: { insideSources: [], pools: {} }, // insideSources: [{type,aclNum,interface|poolName|insideIp+outsideIp}]
+    aaa: { newModel: false, authentication: { login: {} }, authorization: {} },
+    users: {},    // { username: { privilege: N, secret: 'xxx' } }
+    zones: {},    // { zoneName: true }  (zone security)
+    classMaps: {},// { name: { protocols: [] } }  (class-map type inspect)
+    policyMaps: {},// { name: { classes: [{ name, action }] } }  (policy-map type inspect)
+    zonePairs: {}, // { name: { source, destination, servicePolicy: null } }
   };
 }
 
@@ -256,6 +270,14 @@ export class Terminal {
       if (this._isAbbrev(cmd, 'ipv6'))           return this._cmdGlobalIpv6(args, rawArgs);
       if (this._isAbbrev(cmd, 'service'))        return { lines: [] }; // accept silently
       if (this._isAbbrev(cmd, 'logging'))        return { lines: [] };
+      if (this._isAbbrev(cmd, 'ntp'))            return { lines: [] };
+      if (this._isAbbrev(cmd, 'crypto'))         return { lines: [] }; // crypto isakmp/ipsec: simulated
+      if (this._isAbbrev(cmd, 'aaa'))            return this._cmdAaa(args, rawArgs);
+      if (this._isAbbrev(cmd, 'username'))       return this._cmdUsername(rawArgs);
+      if (cmd === 'zone' && args[0] === 'security')      return this._cmdZoneSecurity(rawArgs);
+      if (cmd === 'class-map' && args[0] === 'type' && args[1] === 'inspect') return this._cmdClassMap(rawArgs);
+      if (cmd === 'policy-map' && args[0] === 'type' && args[1] === 'inspect') return this._cmdPolicyMap(rawArgs);
+      if (cmd === 'zone-pair' && args[0] === 'security') return this._cmdZonePair(rawArgs);
       return this._unknownCmd(cmd);
     }
 
@@ -273,6 +295,7 @@ export class Terminal {
       if (this._isAbbrev(cmd, 'standby'))       return this._cmdStandby(args, rawArgs);
       if (this._isAbbrev(cmd, 'channel-group')) return this._cmdChannelGroup(args);
       if (this._isAbbrev(cmd, 'spanning-tree')) return this._cmdIfSpanningTree(args);
+      if (cmd === 'zone-member' && args[0] === 'security') return this._cmdZoneMember(rawArgs);
       return this._unknownCmd(cmd);
     }
 
@@ -282,7 +305,40 @@ export class Terminal {
       if (this._isAbbrev(cmd, 'login'))     return this._cmdLineLogin(args);
       if (this._isAbbrev(cmd, 'transport')) return this._cmdTransport(args);
       if (this._isAbbrev(cmd, 'exec-timeout')) return { lines: [] };
+      if (this._isAbbrev(cmd, 'privilege')) return { lines: [] };
       if (cmd === 'no')                     return this._cmdNo(args, rawArgs, mode);
+      return this._unknownCmd(cmd);
+    }
+
+    // ── Zone Security Config ─────────────────────────────────────────────────
+    if (mode === MODE.ZONE_CONFIG) {
+      if (this._isAbbrev(cmd, 'description')) return { lines: [] };
+      return this._unknownCmd(cmd);
+    }
+
+    // ── Class-Map type inspect Config ────────────────────────────────────────
+    if (mode === MODE.CLASS_MAP_CONFIG) {
+      if (this._isAbbrev(cmd, 'match')) return this._cmdClassMapMatch(args, rawArgs);
+      return this._unknownCmd(cmd);
+    }
+
+    // ── Policy-Map type inspect Config ───────────────────────────────────────
+    if (mode === MODE.POLICY_MAP_CONFIG) {
+      if (cmd === 'class' && args[0] === 'type' && args[1] === 'inspect') return this._cmdPolicyMapClass(rawArgs);
+      if (this._isAbbrev(cmd, 'inspect')) { this._context.policyMapInspect = true; return { lines: [] }; }
+      if (this._isAbbrev(cmd, 'drop'))    { this._context.policyMapInspect = false; return { lines: [] }; }
+      if (this._isAbbrev(cmd, 'pass'))    { this._context.policyMapInspect = false; return { lines: [] }; }
+      return this._unknownCmd(cmd);
+    }
+
+    // ── Zone-Pair Config ─────────────────────────────────────────────────────
+    if (mode === MODE.ZONE_PAIR_CONFIG) {
+      if (cmd === 'service-policy' && args[0] === 'type' && args[1] === 'inspect') {
+        const zp = this._context.zonePair;
+        if (zp && this._config.zonePairs[zp]) this._config.zonePairs[zp].servicePolicy = rawArgs[3];
+        return { lines: [] };
+      }
+      if (this._isAbbrev(cmd, 'description')) return { lines: [] };
       return this._unknownCmd(cmd);
     }
 
@@ -762,6 +818,141 @@ export class Terminal {
     return { lines: [] };
   }
 
+  // ── AAA Commands ─────────────────────────────────────────────────────────
+  _cmdAaa(args, rawArgs) {
+    if (!this._config.aaa) this._config.aaa = { newModel: false, authentication: { login: {} }, authorization: {} };
+    // aaa new-model
+    if (args[0] === 'new-model') {
+      this._config.aaa.newModel = true;
+      return { lines: [] };
+    }
+    // aaa authentication login {default|<name>} {local|tacacs+|radius|none}
+    if (args[0] === 'authentication' && args[1] === 'login') {
+      const list   = rawArgs[3];   // 'default' or list name
+      const method = rawArgs[4];   // 'local', 'tacacs+', 'radius'
+      if (list && method) this._config.aaa.authentication.login[list] = method;
+      return { lines: [] };
+    }
+    // aaa authorization exec {default} {local|tacacs+|if-authenticated}
+    if (args[0] === 'authorization' && args[1] === 'exec') {
+      const list   = rawArgs[3];
+      const method = rawArgs[4];
+      if (list && method) {
+        if (!this._config.aaa.authorization.exec) this._config.aaa.authorization.exec = {};
+        this._config.aaa.authorization.exec[list] = method;
+      }
+      return { lines: [] };
+    }
+    // aaa authorization commands {15} {default} {local|none}
+    if (args[0] === 'authorization' && args[1] === 'commands') {
+      return { lines: [] };
+    }
+    // aaa accounting
+    if (args[0] === 'accounting') {
+      return { lines: [] };
+    }
+    return this._err('% Incomplete aaa command.');
+  }
+
+  _cmdUsername(rawArgs) {
+    // username <name> privilege <n> secret <pass>
+    // username <name> secret <pass>
+    if (!this._config.users) this._config.users = {};
+    const name = rawArgs[0];
+    if (!name) return this._err('% Incomplete command.');
+    const entry = this._config.users[name] || { privilege: 1, secret: null };
+    const args = rawArgs.slice(1);
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === 'privilege')  entry.privilege = parseInt(args[i + 1] || '1', 10);
+      if (args[i] === 'secret')     entry.secret    = args[i + 1] || '';
+      if (args[i] === 'password')   entry.secret    = args[i + 1] || '';
+    }
+    this._config.users[name] = entry;
+    return { lines: [] };
+  }
+
+  // ── Zone-Based Firewall Commands ─────────────────────────────────────────
+  _cmdZoneSecurity(rawArgs) {
+    // zone security <name>
+    const name = rawArgs[2];
+    if (!name) return this._err('% Incomplete command. Usage: zone security <name>');
+    if (!this._config.zones) this._config.zones = {};
+    this._config.zones[name] = true;
+    this._context.zone = name;
+    return this._setMode(MODE.ZONE_CONFIG);
+  }
+
+  _cmdZoneMember(rawArgs) {
+    // zone-member security <zone-name>  (in interface config)
+    const zone = rawArgs[2];
+    if (!zone) return this._err('% Incomplete command.');
+    const iface = this._config.interfaces[this._context.interface];
+    if (iface) iface.zoneMember = zone;
+    return { lines: [] };
+  }
+
+  _cmdClassMap(rawArgs) {
+    // class-map type inspect [match-any|match-all] <name>
+    // rawArgs: ['class-map','type','inspect', <match|name>, [name]]
+    let name = rawArgs[3];
+    // If rawArgs[3] is 'match-any' or 'match-all', name is rawArgs[4]
+    if (name === 'match-any' || name === 'match-all') name = rawArgs[4];
+    if (!name) return this._err('% Incomplete command. Usage: class-map type inspect <name>');
+    if (!this._config.classMaps) this._config.classMaps = {};
+    if (!this._config.classMaps[name]) this._config.classMaps[name] = { protocols: [] };
+    this._context.classMap = name;
+    return this._setMode(MODE.CLASS_MAP_CONFIG);
+  }
+
+  _cmdClassMapMatch(args, rawArgs) {
+    // match protocol <proto>
+    if (args[0] === 'protocol') {
+      const proto = rawArgs[2];
+      const name  = this._context.classMap;
+      if (proto && name && this._config.classMaps[name]) {
+        this._config.classMaps[name].protocols.push(proto);
+      }
+    }
+    return { lines: [] };
+  }
+
+  _cmdPolicyMap(rawArgs) {
+    // policy-map type inspect <name>
+    const name = rawArgs[3];
+    if (!name) return this._err('% Incomplete command. Usage: policy-map type inspect <name>');
+    if (!this._config.policyMaps) this._config.policyMaps = {};
+    if (!this._config.policyMaps[name]) this._config.policyMaps[name] = { classes: [] };
+    this._context.policyMap = name;
+    this._context.policyMapClass = null;
+    return this._setMode(MODE.POLICY_MAP_CONFIG);
+  }
+
+  _cmdPolicyMapClass(rawArgs) {
+    // class type inspect <class-name>
+    const className = rawArgs[3];
+    if (!className) return this._err('% Incomplete command.');
+    const pmName = this._context.policyMap;
+    if (pmName && this._config.policyMaps[pmName]) {
+      this._context.policyMapClass = className;
+      // Add class entry if not present
+      const existing = this._config.policyMaps[pmName].classes.find(c => c.name === className);
+      if (!existing) this._config.policyMaps[pmName].classes.push({ name: className, action: 'inspect' });
+    }
+    return { lines: [] };
+  }
+
+  _cmdZonePair(rawArgs) {
+    // zone-pair security <name> source <src-zone> destination <dst-zone>
+    const name = rawArgs[2];
+    const src  = rawArgs[4];
+    const dst  = rawArgs[6];
+    if (!name || !src || !dst) return this._err('% Incomplete command. Usage: zone-pair security <name> source <zone> destination <zone>');
+    if (!this._config.zonePairs) this._config.zonePairs = {};
+    this._config.zonePairs[name] = { source: src, destination: dst, servicePolicy: null };
+    this._context.zonePair = name;
+    return this._setMode(MODE.ZONE_PAIR_CONFIG);
+  }
+
   _cmdNo(args, rawArgs, mode) {
     const sub = args[0];
     if (mode === MODE.INTERFACE_CONFIG) {
@@ -957,6 +1148,10 @@ export class Terminal {
       [MODE.ROUTER_CONFIG]:    MODE.GLOBAL_CONFIG,
       [MODE.ACL_CONFIG]:       MODE.GLOBAL_CONFIG,
       [MODE.DHCP_CONFIG]:      MODE.GLOBAL_CONFIG,
+      [MODE.ZONE_CONFIG]:      MODE.GLOBAL_CONFIG,
+      [MODE.CLASS_MAP_CONFIG]: MODE.GLOBAL_CONFIG,
+      [MODE.POLICY_MAP_CONFIG]:MODE.GLOBAL_CONFIG,
+      [MODE.ZONE_PAIR_CONFIG]: MODE.GLOBAL_CONFIG,
     };
     // 'end' jumps straight to PRIVILEGED_EXEC from any config mode
     if (cmd === 'end' && this._mode !== MODE.USER_EXEC && this._mode !== MODE.PRIVILEGED_EXEC) {
@@ -981,10 +1176,20 @@ export class Terminal {
       { text: `hostname ${c.hostname}`, cls: 'text-white' },
       { text: '!', cls: 'text-gray-500' },
     ];
+    if (c.aaa?.newModel) out.push({ text: 'aaa new-model', cls: 'text-white' });
     if (c.enableSecret)  out.push({ text: `enable secret ${c.enableSecret}`, cls: 'text-white' });
     if (c.banner)        out.push({ text: `banner motd ^C${c.banner}^C`, cls: 'text-white' });
     if (c.ipRouting)     out.push({ text: 'ip routing', cls: 'text-white' });
     if (c.ipv6Routing)   out.push({ text: 'ipv6 unicast-routing', cls: 'text-white' });
+    for (const [uname, udata] of Object.entries(c.users || {})) {
+      out.push({ text: `username ${uname} privilege ${udata.privilege} secret ${udata.secret}`, cls: 'text-white' });
+    }
+    for (const [listName, method] of Object.entries(c.aaa?.authentication?.login || {})) {
+      out.push({ text: `aaa authentication login ${listName} ${method}`, cls: 'text-white' });
+    }
+    for (const [listName, method] of Object.entries(c.aaa?.authorization?.exec || {})) {
+      out.push({ text: `aaa authorization exec ${listName} ${method}`, cls: 'text-white' });
+    }
 
     out.push({ text: '!', cls: 'text-gray-500' });
 
@@ -1004,8 +1209,9 @@ export class Terminal {
           out.push({ text: ` switchport port-security mac-address ${m}`, cls: 'text-white' }));
         if (iface.portSecurity.violation) out.push({ text: ` switchport port-security violation ${iface.portSecurity.violation}`, cls: 'text-white' });
       }
-      if (iface.natInside)  out.push({ text: ' ip nat inside',  cls: 'text-white' });
-      if (iface.natOutside) out.push({ text: ' ip nat outside', cls: 'text-white' });
+      if (iface.natInside)    out.push({ text: ' ip nat inside',  cls: 'text-white' });
+      if (iface.natOutside)   out.push({ text: ' ip nat outside', cls: 'text-white' });
+      if (iface.zoneMember)   out.push({ text: ` zone-member security ${iface.zoneMember}`, cls: 'text-white' });
       if (iface.acl) out.push({ text: ` ip access-group ${iface.acl.name} ${iface.acl.direction}`, cls: 'text-white' });
       if (iface.ipv6) iface.ipv6.forEach(a => out.push({ text: ` ipv6 address ${a}`, cls: 'text-white' }));
       if (iface.channelGroup) out.push({ text: ` channel-group ${iface.channelGroup.id} mode ${iface.channelGroup.mode}`, cls: 'text-white' });
@@ -1085,6 +1291,34 @@ export class Terminal {
           out.push({ text: `access-list ${name} ${entry}`, cls: 'text-white' }));
         out.push({ text: '!', cls: 'text-gray-500' });
       }
+    }
+
+    // Zone security
+    for (const zoneName of Object.keys(c.zones || {})) {
+      out.push({ text: `zone security ${zoneName}`, cls: 'text-cyan-300' });
+      out.push({ text: '!', cls: 'text-gray-500' });
+    }
+    // Interface zone-member (rendered inline in interface block above)
+    // Class-maps
+    for (const [cmName, cm] of Object.entries(c.classMaps || {})) {
+      out.push({ text: `class-map type inspect match-any ${cmName}`, cls: 'text-cyan-300' });
+      cm.protocols.forEach(p => out.push({ text: ` match protocol ${p}`, cls: 'text-white' }));
+      out.push({ text: '!', cls: 'text-gray-500' });
+    }
+    // Policy-maps
+    for (const [pmName, pm] of Object.entries(c.policyMaps || {})) {
+      out.push({ text: `policy-map type inspect ${pmName}`, cls: 'text-cyan-300' });
+      pm.classes.forEach(cls => {
+        out.push({ text: ` class type inspect ${cls.name}`, cls: 'text-white' });
+        out.push({ text: `  ${cls.action}`, cls: 'text-white' });
+      });
+      out.push({ text: '!', cls: 'text-gray-500' });
+    }
+    // Zone-pairs
+    for (const [zpName, zp] of Object.entries(c.zonePairs || {})) {
+      out.push({ text: `zone-pair security ${zpName} source ${zp.source} destination ${zp.destination}`, cls: 'text-cyan-300' });
+      if (zp.servicePolicy) out.push({ text: ` service-policy type inspect ${zp.servicePolicy}`, cls: 'text-white' });
+      out.push({ text: '!', cls: 'text-gray-500' });
     }
 
     out.push({ text: 'end', cls: 'text-gray-400' });
@@ -1439,6 +1673,67 @@ export class Terminal {
       }
     }
 
+    // AAA
+    if (targetConfig.aaa) {
+      const ta = targetConfig.aaa, ca = current.aaa || {};
+      if (ta.newModel && !ca.newModel) missing.push('aaa new-model not configured');
+      for (const [list, method] of Object.entries(ta.authentication?.login || {})) {
+        const actual = ca.authentication?.login?.[list];
+        if (actual !== method) missing.push(`aaa authentication login ${list} ${method} not configured (got: ${actual ?? 'none'})`);
+      }
+      for (const [list, method] of Object.entries(ta.authorization?.exec || {})) {
+        const actual = ca.authorization?.exec?.[list];
+        if (actual !== method) missing.push(`aaa authorization exec ${list} ${method} not configured`);
+      }
+    }
+
+    // Users
+    for (const [uname, tuser] of Object.entries(targetConfig.users || {})) {
+      const auser = current.users?.[uname];
+      if (!auser) { missing.push(`username ${uname} not configured`); continue; }
+      if (tuser.privilege !== undefined && auser.privilege !== tuser.privilege)
+        missing.push(`username ${uname}: privilege should be ${tuser.privilege}`);
+      if (tuser.secret !== undefined && auser.secret !== tuser.secret)
+        missing.push(`username ${uname}: secret mismatch`);
+    }
+
+    // Zones
+    for (const zoneName of Object.keys(targetConfig.zones || {})) {
+      if (!current.zones?.[zoneName]) missing.push(`zone security ${zoneName} not configured`);
+    }
+
+    // Zone-pairs
+    for (const [zpName, tzp] of Object.entries(targetConfig.zonePairs || {})) {
+      const azp = current.zonePairs?.[zpName];
+      if (!azp) { missing.push(`zone-pair security ${zpName} not configured`); continue; }
+      if (tzp.source && azp.source !== tzp.source)
+        missing.push(`zone-pair ${zpName}: source zone should be ${tzp.source}`);
+      if (tzp.destination && azp.destination !== tzp.destination)
+        missing.push(`zone-pair ${zpName}: destination zone should be ${tzp.destination}`);
+      if (tzp.servicePolicy && azp.servicePolicy !== tzp.servicePolicy)
+        missing.push(`zone-pair ${zpName}: service-policy should be ${tzp.servicePolicy}`);
+    }
+
+    // Class-maps
+    for (const [cmName, tcm] of Object.entries(targetConfig.classMaps || {})) {
+      const acm = current.classMaps?.[cmName];
+      if (!acm) { missing.push(`class-map type inspect ${cmName} not configured`); continue; }
+      for (const proto of (tcm.protocols || [])) {
+        if (!acm.protocols.includes(proto))
+          missing.push(`class-map ${cmName}: match protocol ${proto} missing`);
+      }
+    }
+
+    // Policy-maps
+    for (const [pmName, tpm] of Object.entries(targetConfig.policyMaps || {})) {
+      const apm = current.policyMaps?.[pmName];
+      if (!apm) { missing.push(`policy-map type inspect ${pmName} not configured`); continue; }
+      for (const tcls of (tpm.classes || [])) {
+        const found = apm.classes.some(c => c.name === tcls.name);
+        if (!found) missing.push(`policy-map ${pmName}: class type inspect ${tcls.name} missing`);
+      }
+    }
+
     const totalChecks = this._countChecks(targetConfig);
     return { missing, totalChecks };
   }
@@ -1510,6 +1805,17 @@ export class Terminal {
       n += Object.keys(target.nat.pools || {}).length;
       n += (target.nat.insideSources?.length || 0);
     }
+    // AAA
+    if (target.aaa) {
+      if (target.aaa.newModel) n++;
+      n += Object.keys(target.aaa.authentication?.login || {}).length;
+      n += Object.keys(target.aaa.authorization?.exec || {}).length;
+    }
+    n += Object.keys(target.users || {}).length;
+    n += Object.keys(target.zones || {}).length;
+    n += Object.keys(target.zonePairs || {}).length;
+    for (const cm of Object.values(target.classMaps || {})) n += 1 + (cm.protocols?.length || 0);
+    n += Object.keys(target.policyMaps || {}).length;
     return n || 1;
   }
 

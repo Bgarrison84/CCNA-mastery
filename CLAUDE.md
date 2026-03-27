@@ -299,8 +299,12 @@ Work through pillars in order, one per session. Ask before moving to next pillar
 - [x] Story Mode 6-week timeline: collapsible week nodes (green=done, amber=active, gray=locked) with per-week beat progress bars, above mission card
 - [x] Flashcard summary SRS distribution: NEW/DUE/LEARNING/MASTERED bar chart derived from `store.getSRSStats()` on session card IDs
 
-### Pillar 2 — Security Training Module
-New domain/section covering: Threat Taxonomy (card-sort diagram), Firewall Types (packet flow), IDS/IPS placement, AAA packet-flow step-through, Cryptography (key exchange animation), VPN Types topology, ACL security scenarios, Zero Trust principles. 100+ new questions + "The Breach" Boss Battle. 3 new security labs (basic ACL hardening, local AAA, Zone-Based Firewall).
+### Pillar 2 — Security Training Module *(done 2026-03-27)*
+- [x] AAA commands in Terminal.js: `aaa new-model`, `username`, `aaa authentication login default local`, `aaa authorization exec default local`; ZONE_CONFIG/CLASS_MAP_CONFIG/POLICY_MAP_CONFIG/ZONE_PAIR_CONFIG modes
+- [x] ZBF commands: `zone security`, `zone-member security`, `class-map type inspect`, `match protocol`, `policy-map type inspect`, `class type inspect`, `inspect`, `zone-pair security`, `service-policy type inspect`; full running-config rendering + validate() support
+- [x] 3 new security labs: `lab_w5_acl_hardening` (easy/80XP), `lab_w5_local_aaa` (medium/120XP), `lab_w5_zone_based_fw` (hard/200XP); labs total now 36
+- [x] "The Breach" boss battle (boss_w5_the_breach, 15 questions, 350XP/150 perfect bonus); boss battles total now 7
+- [x] 56 new questions: AAA (5), ACLs (6), Threats (6), SSH/hardening (5), VPN/crypto (3), port security/L2 (4), ZBF (2), wireless security (3), IDS/IPS (2), cryptography basics (3), misc security (7), IP Services security (2), multi-select (3), drag-drop (3)
 
 ### Pillar 3 — Cloud Training Module
 New section covering: IaaS/PaaS/SaaS responsibility matrix (interactive), cloud deployment models, virtual networking mapped to on-prem (VPC↔network, SG↔firewall, NACL↔ACL), AWS networking step-through (EC2 packet journey), SD-WAN/SASE, IaC comparison (Ansible/Terraform). 60+ new questions + "The Migration" Boss Battle.
