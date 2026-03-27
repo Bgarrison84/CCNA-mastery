@@ -115,6 +115,18 @@ export class StoryMode {
 
         <div id="story-dialogue" class="bg-gray-900 border border-gray-700 rounded p-4 text-green-200 leading-relaxed min-h-[80px] font-mono text-sm"></div>
 
+        ${beat.concept_visual ? `
+        <div class="story-concept-block mt-4 border border-green-900/40 rounded overflow-hidden">
+          <button class="story-concept-toggle w-full flex items-center justify-between px-4 py-2 bg-green-950/40 hover:bg-green-900/30 text-left transition-colors">
+            <span class="text-xs font-semibold text-green-400">📐 ${beat.concept_visual.title || 'Concept Diagram'}</span>
+            <span class="story-concept-caret text-green-600 text-xs">▶</span>
+          </button>
+          <div class="story-concept-panel hidden px-3 py-3 bg-black/60">
+            ${beat.concept_visual.explanation ? `<p class="text-xs text-gray-400 mb-3 leading-relaxed">${beat.concept_visual.explanation}</p>` : ''}
+            <div class="story-diagram-container"></div>
+          </div>
+        </div>` : ''}
+
         ${beat.choices?.length ? `
         <div id="story-choices" class="mt-4 space-y-2 hidden">
           ${beat.choices.map((c, i) => `
@@ -141,6 +153,25 @@ export class StoryMode {
       });
       if (cont) {
         cont.addEventListener('click', () => this._markSeen(beat));
+      }
+
+      // Concept visual toggle
+      const conceptToggle = this.containerEl.querySelector('.story-concept-toggle');
+      if (conceptToggle) {
+        conceptToggle.addEventListener('click', () => {
+          const panel  = conceptToggle.parentElement.querySelector('.story-concept-panel');
+          const caret  = conceptToggle.querySelector('.story-concept-caret');
+          const isOpen = !panel.classList.contains('hidden');
+          panel.classList.toggle('hidden', isOpen);
+          if (caret) caret.textContent = isOpen ? '▶' : '▼';
+          if (!isOpen && panel.dataset.loaded !== '1') {
+            panel.dataset.loaded = '1';
+            const container = panel.querySelector('.story-diagram-container');
+            if (container && beat.concept_visual?.diagramId && window.renderDiagram) {
+              window.renderDiagram(beat.concept_visual.diagramId, container);
+            }
+          }
+        });
       }
     });
   }

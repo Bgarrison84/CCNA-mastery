@@ -2,7 +2,7 @@
   "name": "CCNA Mastery",
   "short_name": "CCNA",
   "description": "Gamified CCNA 200-301 study app — offline-first",
-  "start_url": "./index.html",
+  "start_url": "./app.html",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#00ff41",

@@ -284,3 +284,79 @@ New file at repo root served by GitHub Pages as the public entry point.
 - Each diagram module exports a `render(containerEl)` function that injects HTML/SVG and wires up its own event listeners
 - Story Mode beat schema gains optional `concept_visual` field: `{ title, diagramId, explanation }` — `diagramId` maps to a diagrams module
 - Reference section schema gains optional `deep_dive` field: `{ diagramId, worked_example, exam_traps }`
+---
+
+## Phase 9 — Expand Learning Depth (planned 2026-03-26)
+Full notes in memory: project_phase9.md
+Goal: interactivity audit + security training + cloud training + practical projects.
+Work through pillars in order, one per session. Ask before moving to next pillar.
+
+### Pillar 1 — Interactivity Audit
+Scan every view for static areas that can become interactive. Priority: Reference sections without diagrams (ports, routing, HSRP, SNMP, AAA), Boss Battle end screen, VLSM drill mode in Subnetting, Story Mode visual timeline, Flashcard SRS curve chart.
+
+### Pillar 2 — Security Training Module
+New domain/section covering: Threat Taxonomy (card-sort diagram), Firewall Types (packet flow), IDS/IPS placement, AAA packet-flow step-through, Cryptography (key exchange animation), VPN Types topology, ACL security scenarios, Zero Trust principles. 100+ new questions + "The Breach" Boss Battle. 3 new security labs (basic ACL hardening, local AAA, Zone-Based Firewall).
+
+### Pillar 3 — Cloud Training Module
+New section covering: IaaS/PaaS/SaaS responsibility matrix (interactive), cloud deployment models, virtual networking mapped to on-prem (VPC↔network, SG↔firewall, NACL↔ACL), AWS networking step-through (EC2 packet journey), SD-WAN/SASE, IaC comparison (Ansible/Terraform). 60+ new questions + "The Migration" Boss Battle.
+
+### Pillar 4 — Practical Projects Mode
+New `renderProjects()` view — 6–8 multi-phase guided projects combining CLI labs + quiz checkpoints:
+1. Build a Small Office Network (400 XP, medium)
+2. Secure a Branch Router (250 XP, easy-medium)
+3. OSPF Multi-Area Design (450 XP, medium-hard)
+4. NAT + DHCP + ACL Lab (380 XP, medium)
+5. IPv6 Dual-Stack Migration (500 XP, hard)
+6. Zero-Trust Branch Hardening (550 XP, hard — start from broken config)
+7. Cloud-Connected HQ (500 XP, hard — IPsec VPN to simulated AWS)
+8. VLAN Segmentation + Port Security Audit (350 XP, medium)
+New `type: "project"` schema field; `store.completedProjects{}` for phase progress.
+
+### Pillar 5 — Mega Labs
+Large-scale, multi-concept, multi-phase CLI labs that simulate real enterprise scenarios end-to-end. Unlike Projects (which are guided with hints), Mega Labs are closer to exam simulations — minimal hand-holding, full topology, multiple devices, cross-domain objectives.
+
+**Design principles:**
+- Each Mega Lab spans 4–8 phases, each unlocking after the previous is validated
+- Phase completion is checked by `validate()` on the relevant device(s); partial credit per phase
+- Topology diagrams shown inline (HTML/CSS, no images) — user can see the full network before starting
+- "Briefing" narrative: a scenario context (e.g. "You are the new network engineer at Acme Corp...") sets the stakes
+- Hint system still available but heavily penalised (−30 XP per hint used)
+- Completion awards a unique title/badge stored in `store.state.badges[]`
+- Mega Labs are gated: appear locked until the player reaches a minimum level or completes prerequisite labs
+
+**Mega Lab catalogue (implement 5):**
+
+1. **"Enterprise Campus Build"** — 800 XP · Hard · ~90 min
+   Topology: Core switch, 2× distribution switches, 4× access switches, 1× router (Internet uplink)
+   Phases: (1) VLANs + trunks across all switches, (2) STP root bridge election + PortFast on access ports, (3) Inter-VLAN routing via SVIs on core switch + `ip routing`, (4) OSPF between core switch and router, (5) DHCP pools per VLAN on router, (6) PAT for internet access, (7) ACL: block Guest VLAN from reaching management VLAN, (8) Port security on access ports
+   Badge: 🏛 Campus Architect
+
+2. **"Branch Office Disaster Recovery"** — 700 XP · Hard · ~75 min
+   Topology: HQ router, Branch router, ISP cloud (simulated via loopbacks), 2× switches
+   Phases: (1) Physical addressing + interface config both routers, (2) OSPF area 0 between HQ and Branch, (3) HSRP on HQ-side switches for gateway redundancy, (4) Site-to-site IPsec VPN tunnel HQ↔Branch, (5) ACL to permit only VPN traffic + management protocols, (6) Floating static route as OSPF backup (higher AD), (7) Verify failover: disable primary link, confirm traffic reroutes
+   Badge: 🔄 Resilience Engineer
+
+3. **"Full Security Hardening Audit"** — 750 XP · Hard · ~80 min
+   Topology: Internet router, Firewall router (ZBF), internal switch, DMZ switch, internal hosts, DMZ server
+   Start state: pre-populated running-config with 10 deliberate misconfigs (Telnet enabled, weak passwords, permissive ACLs, no SSH, banner missing, unused interfaces up, CDP on external interface, etc.)
+   Phases: (1) Identify + fix authentication (passwords, secret, SSH), (2) Disable Telnet, enforce SSH v2, (3) Banner motd + login, (4) Shut unused interfaces + disable CDP on external ports, (5) Build Zone-Based Firewall zones (INSIDE/OUTSIDE/DMZ), (6) Class-maps + policy-maps: permit HTTP/HTTPS from inside, permit only return traffic from outside, (7) ACL: block RFC 1918 spoofing inbound on WAN, (8) Validate all 10 fixes
+   Badge: 🔐 Security Auditor
+
+4. **"Cloud-Edge Integration"** — 850 XP · Expert · ~100 min
+   Topology: On-prem router, DMZ, internal network, simulated AWS VPC (loopback-based), SD-WAN stub
+   Phases: (1) On-prem addressing + OSPF, (2) NAT/PAT for internet, (3) IPsec site-to-site VPN to "AWS VGW" (loopback), (4) BGP stub: advertise on-prem prefix to simulated ISP, accept default route, (5) Split tunnelling ACL: corporate traffic via VPN, internet via NAT, (6) IPv6 dual-stack on internal network + OSPFv3, (7) Automation checkpoint: write Ansible-style pseudoconfig YAML (quiz validation, not CLI), (8) Final audit: `show` command quiz — interpret outputs to confirm all services operational
+   Badge: ☁️ Cloud-Edge Architect
+
+5. **"ISP Core Simulation"** — 900 XP · Expert · ~110 min
+   Topology: 4× routers (simulating ISP core), 2× customer edge routers, 2× customer switches
+   Phases: (1) OSPF area design (backbone + 2 stub areas), (2) BGP iBGP full mesh between ISP routers, (3) BGP eBGP to customer edges, (4) Route filtering: prefix-lists to prevent customer routes leaking into ISP core, (5) QoS: mark customer traffic (DSCP EF for voice, AF for video, BE for data), apply queuing policy, (6) IPv6 BGP (MP-BGP) — add IPv6 address family, (7) MPLS stub config (label switching commands — conceptual validation via quiz), (8) Full end-to-end ping + traceroute validation across all paths
+   Badge: 🌐 ISP Architect
+
+**Implementation notes:**
+- Mega Labs reuse `Terminal.js` multi-device engine (`devices{}` wrapper, `switchDevice()`)
+- New `type: "megalab"` in content schema with fields: `phases[]`, `topology_html`, `briefing`, `min_level`, `prerequisite_labs[]`, `badge`
+- Each phase: `{ id, title, objectives[], device, targetConfig{} }`  — validated independently
+- `store.state.megaLabProgress: { [labId]: { phase: N, hintsUsed: N, startedAt, completedAt } }`
+- New `renderMegaLabs()` view: dramatic card design, topology preview on hover, locked/unlocked state, badge showcase
+- Phase stepper UI: numbered phases across the top; completed = green, active = amber, locked = grey
+- Auto-save progress after each phase so the user can resume across sessions

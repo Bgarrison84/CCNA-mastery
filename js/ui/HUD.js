@@ -132,6 +132,15 @@ export class HUD {
       'bg-yellow-900 border-yellow-400 text-yellow-200 text-lg font-bold',
       3000
     );
+    // Glow pulse on the XP bar
+    if (this.els.xpBar) {
+      this.els.xpBar.classList.remove('xp-level-pulse');
+      void this.els.xpBar.offsetWidth; // reflow to restart
+      this.els.xpBar.classList.add('xp-level-pulse');
+      this.els.xpBar.addEventListener('animationend', () => {
+        this.els.xpBar.classList.remove('xp-level-pulse');
+      }, { once: true });
+    }
   }
 
   _toastItem({ name, rarity }) {

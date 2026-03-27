@@ -8,13 +8,14 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v1';
+const CACHE_VERSION = 'ccna-v3';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
 const PRECACHE_URLS = [
   './',
-  './index.html',
+  './index.html',   // landing page
+  './app.html',     // the app itself
   './css/tailwind.js',
   './js/main.js',
   './js/core/EventBus.js',
@@ -29,6 +30,16 @@ const PRECACHE_URLS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  './js/diagrams/osi.js',
+  './js/diagrams/tcp.js',
+  './js/diagrams/stp.js',
+  './js/diagrams/ospf.js',
+  './js/diagrams/ethernet.js',
+  './js/diagrams/nat.js',
+  './js/diagrams/vlan.js',
+  './js/diagrams/ipv6.js',
+  './js/diagrams/acl.js',
+  './js/diagrams/subnetting.js',
 ];
 
 // ── Install ──────────────────────────────────────────────────────────────────

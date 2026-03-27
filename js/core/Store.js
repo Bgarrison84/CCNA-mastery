@@ -45,6 +45,9 @@ const DEFAULT_STATE = {
   examHistory: [],           // last 10 exam runs: [{ date, score, correct, total, elapsed, domainStats }]
   examDate: null,            // ISO date string 'YYYY-MM-DD' — user's target exam date
   studyLog: {},              // { 'YYYY-MM-DD': minutes } — per-day study time for heatmap
+  onboardingDone: false,   // true after first-run tour is completed/skipped
+  visitedViews: [],        // views the user has opened at least once (for tip banners)
+  dailyChallengeLog: {},   // { 'YYYY-MM-DD': { questionId, completed, xpAwarded } }
   lastSaved: null,
 };
 
@@ -404,6 +407,58 @@ export class Store {
     this._state.playerName = name.trim() || 'Network Cadet';
     this._persist();
     bus.emit('state:changed', this.state);
+  }
+
+  /** Returns today's daily challenge log entry, or null if not yet set. */
+  getDailyChallengeEntry() {
+    const today = new Date().toISOString().slice(0, 10);
+    return (this._state.dailyChallengeLog || {})[today] || null;
+  }
+
+  /** Record the question chosen for today (idempotent). */
+  setDailyChallengeQuestion(questionId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (!this._state.dailyChallengeLog) this._state.dailyChallengeLog = {};
+    if (!this._state.dailyChallengeLog[today]) {
+      this._state.dailyChallengeLog[today] = { questionId, completed: false, xpAwarded: 0 };
+      this._persist();
+    }
+  }
+
+  /** Mark today's challenge completed and award XP. Returns xp awarded. */
+  completeDailyChallenge(questionId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (!this._state.dailyChallengeLog) this._state.dailyChallengeLog = {};
+    const entry = this._state.dailyChallengeLog[today];
+    if (entry?.completed) return 0; // already done
+    const xp = 50;
+    this._state.dailyChallengeLog[today] = { questionId, completed: true, xpAwarded: xp };
+    this._persist();
+    this.addXP(xp, 'daily_challenge');
+    return xp;
+  }
+
+  setTheme(theme) {
+    if (!this._state.settings) this._state.settings = {};
+    this._state.settings.theme = theme;
+    this._persist();
+  }
+
+  completeOnboarding() {
+    this._state.onboardingDone = true;
+    this._persist();
+  }
+
+  hasVisitedView(view) {
+    return (this._state.visitedViews || []).includes(view);
+  }
+
+  markViewVisited(view) {
+    if (!this._state.visitedViews) this._state.visitedViews = [];
+    if (!this._state.visitedViews.includes(view)) {
+      this._state.visitedViews.push(view);
+      this._persist();
+    }
   }
 
   advanceWeek() {

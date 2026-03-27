@@ -122,14 +122,527 @@ const EXAM_DOMAIN_WEIGHTS = [
 ];
 const EXAM_TIME_SECONDS = 120 * 60; // 120 minutes — real CCNA 200-301 format
 
+// ─── Micro-animation helpers ───────────────────────────────────────────────────
+
+/** Spawn a floating "+N XP" label near an anchor element (or viewport centre). */
+function spawnFloatingXP(amount, anchorEl) {
+  if (!amount || amount <= 0) return;
+  const el = document.createElement('div');
+  el.className = 'float-xp';
+  el.textContent = `+${amount} XP`;
+
+  // Position near anchor or fallback to bottom-centre of viewport
+  if (anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    el.style.left = `${rect.left + rect.width / 2 - 28}px`;
+    el.style.top  = `${rect.top - 8}px`;
+  } else {
+    el.style.left = '50%';
+    el.style.top  = '60%';
+    el.style.transform = 'translateX(-50%)';
+  }
+
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove(), { once: true });
+}
+
+// ─── Loading / Error overlays ─────────────────────────────────────────────────
+
+/** Minimal loading overlay for return visits while content.json fetches. */
+function showLoadingOverlay() {
+  const el = document.createElement('div');
+  el.id = 'loading-overlay';
+  el.style.cssText = [
+    'position:fixed;inset:0;z-index:10001',
+    'background:#0a0a0a',
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px',
+  ].join(';');
+
+  // Scanlines
+  const scan = document.createElement('div');
+  scan.style.cssText = 'position:absolute;inset:0;pointer-events:none;' +
+    'background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,0.015) 2px,rgba(0,255,65,0.015) 4px);';
+  el.appendChild(scan);
+
+  const inner = document.createElement('div');
+  inner.style.cssText = 'position:relative;z-index:1;text-align:center;font-family:\'JetBrains Mono\',monospace;';
+  inner.innerHTML = `
+    <div style="color:#00ff41;font-size:1.1rem;font-weight:800;
+      text-shadow:0 0 12px rgba(0,255,65,0.7);margin-bottom:16px;letter-spacing:0.1em;">
+      CCNA_MASTERY
+    </div>
+    <div id="loading-spinner" style="color:#4a7a4a;font-size:0.78rem;letter-spacing:0.08em;">
+      ▶ loading content<span id="loading-dots">...</span>
+    </div>`;
+  el.appendChild(inner);
+  document.body.appendChild(el);
+
+  // Animate dots
+  const dots = ['·  ', '·· ', '···', ' ··', '  ·'];
+  let i = 0;
+  const iv = setInterval(() => {
+    const d = document.getElementById('loading-dots');
+    if (d) d.textContent = dots[i++ % dots.length];
+    else clearInterval(iv);
+  }, 180);
+  el._stopDots = () => clearInterval(iv);
+}
+
+function hideLoadingOverlay() {
+  const el = document.getElementById('loading-overlay');
+  if (!el) return;
+  if (el._stopDots) el._stopDots();
+  el.style.transition = 'opacity 0.35s ease';
+  el.style.opacity = '0';
+  setTimeout(() => el.remove(), 350);
+}
+
+/** Full-screen error shown when content.json fails to load. Returns a promise
+ *  that resolves when the user clicks Retry (caller should re-run init). */
+function showContentError() {
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.id = 'content-error-screen';
+    el.style.cssText = [
+      'position:fixed;inset:0;z-index:10002',
+      'background:#0a0a0a',
+      'display:flex;flex-direction:column;align-items:center;justify-content:center',
+      'padding:24px;text-align:center',
+      'font-family:\'JetBrains Mono\',\'Fira Code\',Consolas,monospace',
+    ].join(';');
+
+    const scan = document.createElement('div');
+    scan.style.cssText = 'position:absolute;inset:0;pointer-events:none;' +
+      'background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,0.015) 2px,rgba(0,255,65,0.015) 4px);';
+    el.appendChild(scan);
+
+    const box = document.createElement('div');
+    box.style.cssText = 'position:relative;z-index:1;max-width:440px;';
+    box.innerHTML = `
+      <div style="font-size:2rem;margin-bottom:16px;">⚠</div>
+      <div style="color:#ff4444;font-size:1rem;font-weight:800;letter-spacing:0.06em;margin-bottom:10px;
+        text-shadow:0 0 10px rgba(255,68,68,0.6);">OFFLINE — CONTENT FAILED TO LOAD</div>
+      <p style="color:#6a6a6a;font-size:0.78rem;line-height:1.7;margin-bottom:8px;">
+        Could not fetch <code style="color:#8fbc8f;">data/content.json</code>.
+      </p>
+      <p style="color:#5a5a5a;font-size:0.72rem;line-height:1.6;margin-bottom:28px;">
+        If you are offline, try installing the app as a PWA — the service worker will cache all assets so the app works without a connection.
+      </p>
+      <button id="error-retry-btn" style="
+        background:#00ff41;color:#000;border:none;cursor:pointer;
+        font-family:inherit;font-size:0.8rem;font-weight:700;
+        letter-spacing:0.08em;padding:12px 32px;border-radius:4px;
+        transition:box-shadow 0.2s;
+      ">↺ RETRY</button>
+      <div style="margin-top:14px;font-size:0.68rem;color:#3a3a3a;">
+        Your progress is saved locally and will not be lost.
+      </div>`;
+    el.appendChild(box);
+    document.body.appendChild(el);
+
+    document.getElementById('error-retry-btn').addEventListener('click', () => {
+      el.remove();
+      resolve();
+    });
+  });
+}
+
+// ─── Animated Boot Sequence ───────────────────────────────────────────────────
+
+function showBoot(contentPromise) {
+  return new Promise(resolve => {
+    let skipped = false;
+
+    // ── Overlay ──
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+      'position:fixed;inset:0;z-index:10001',
+      'background:#0a0a0a',
+      'display:flex;flex-direction:column;align-items:center;justify-content:center',
+      'padding:24px',
+      'transition:opacity 0.5s ease',
+    ].join(';');
+
+    // Scanlines
+    const scanlines = document.createElement('div');
+    scanlines.style.cssText = [
+      'position:absolute;inset:0;pointer-events:none',
+      'background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,0.015) 2px,rgba(0,255,65,0.015) 4px)',
+    ].join(';');
+    overlay.appendChild(scanlines);
+
+    // Terminal box
+    const box = document.createElement('div');
+    box.style.cssText = [
+      'position:relative;z-index:1',
+      'width:100%;max-width:560px',
+      'font-family:\'JetBrains Mono\',\'Fira Code\',Consolas,monospace',
+      'font-size:0.82rem;line-height:1.8',
+      'color:#c8ffc8',
+    ].join(';');
+
+    // Header
+    const header = document.createElement('div');
+    header.innerHTML = `<span style="color:#00ff41;font-size:1.1rem;font-weight:800;
+      text-shadow:0 0 12px rgba(0,255,65,0.8);">CCNA-MASTERY OS v1.0</span>`;
+    header.style.marginBottom = '4px';
+
+    const divider = document.createElement('div');
+    divider.style.cssText = 'color:#2a4a2a;margin-bottom:16px;';
+    divider.textContent = '━'.repeat(48);
+
+    // Lines container
+    const lines = document.createElement('div');
+
+    // Skip hint
+    const skipHint = document.createElement('div');
+    skipHint.style.cssText = 'margin-top:24px;font-size:0.65rem;color:#2a4a2a;letter-spacing:0.08em;';
+    skipHint.textContent = 'Press any key to skip...';
+
+    box.appendChild(header);
+    box.appendChild(divider);
+    box.appendChild(lines);
+    box.appendChild(skipHint);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    // ── Skip handler ──
+    function skip() {
+      if (skipped) return;
+      skipped = true;
+      fadeOut();
+    }
+    document.addEventListener('keydown', skip, { once: true });
+    overlay.addEventListener('pointerdown', skip, { once: true });
+
+    function fadeOut() {
+      overlay.style.opacity = '0';
+      setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve();
+      }, 500);
+    }
+
+    // ── Line printer ──
+    function addLine(text, color = '#8fbc8f') {
+      const el = document.createElement('div');
+      el.style.color = color;
+      el.innerHTML = text;
+      lines.appendChild(el);
+      return el;
+    }
+
+    function pad(label, width = 38) {
+      const dots = Math.max(1, width - label.length);
+      return label + '<span style="color:#2a4a2a">' + '.'.repeat(dots) + '</span>';
+    }
+
+    function delay(ms) {
+      return new Promise(r => setTimeout(r, skipped ? 0 : ms));
+    }
+
+    // ── Boot sequence ──
+    async function runBoot() {
+      // Timestamp helper
+      let t = 0;
+      function ts() {
+        const s = (t / 1000).toFixed(3);
+        t += Math.floor(Math.random() * 120) + 40;
+        return `<span style="color:#2a4a2a">[${s.padStart(9)}]</span> `;
+      }
+
+      await delay(120);
+      addLine(ts() + pad('Initializing game engine') +
+        '<span style="color:#00ff41"> OK</span>');
+
+      await delay(180);
+      addLine(ts() + pad('Loading player state') +
+        '<span style="color:#00ff41"> OK</span>  ' +
+        `<span style="color:#4a7a4a">${store.state.playerName}</span>`);
+
+      await delay(200);
+      addLine(ts() + pad('Checking streak') +
+        '<span style="color:#00ff41"> OK</span>  ' +
+        `<span style="color:#4a7a4a">🔥 ${store.state.streak.current} day${store.state.streak.current !== 1 ? 's' : ''}</span>`);
+
+      await delay(220);
+      // Content line — spins until fetch resolves
+      const contentLine = addLine(ts() + pad('Loading content database') +
+        '<span id="boot-spinner" style="color:#ffb000"> ···</span>', '#8fbc8f');
+
+      // Animate spinner while waiting for content
+      const spinFrames = ['···', '••·', '•••', '·••', '···'];
+      let spinIdx = 0;
+      const spinInterval = setInterval(() => {
+        const s = document.getElementById('boot-spinner');
+        if (s) s.textContent = ' ' + spinFrames[spinIdx++ % spinFrames.length];
+      }, 160);
+
+      // Wait for content fetch
+      const rawContent = await contentPromise;
+      clearInterval(spinInterval);
+
+      const qCount = rawContent?.questions?.length ?? 0;
+      const labCount = rawContent?.labs?.length ?? 0;
+      const spinner = document.getElementById('boot-spinner');
+      if (spinner) {
+        spinner.style.color = '#00ff41';
+        spinner.textContent = ' OK';
+      }
+      contentLine.innerHTML += `  <span style="color:#4a7a4a">${qCount.toLocaleString()} questions · ${labCount} labs</span>`;
+
+      await delay(180);
+      addLine(ts() + pad('Mounting interface') +
+        '<span style="color:#00ff41"> OK</span>');
+
+      await delay(200);
+      addLine(ts() + pad('Starting session') +
+        '<span style="color:#00ff41"> OK</span>');
+
+      await delay(120);
+      const readyLine = document.createElement('div');
+      readyLine.style.cssText = 'margin-top:16px;color:#00ff41;font-weight:700;' +
+        'text-shadow:0 0 8px rgba(0,255,65,0.7);';
+      readyLine.textContent = '▶ SYSTEM READY';
+      lines.appendChild(readyLine);
+
+      await delay(600);
+      document.removeEventListener('keydown', skip);
+      overlay.removeEventListener('pointerdown', skip);
+      fadeOut();
+    }
+
+    runBoot();
+  });
+}
+
+// ─── Onboarding / First-Run Tour ──────────────────────────────────────────────
+
+function showOnboarding() {
+  return new Promise(resolve => {
+    const SLIDES = [
+      {
+        icon: '📖',
+        title: 'Story Mode',
+        body: 'Follow a 6-week narrative campaign that introduces every CCNA topic through character-driven beats. Each week unlocks a boss battle — defeat it to advance.',
+        hint: 'Start here if you\'re new to CCNA.',
+      },
+      {
+        icon: '⚡',
+        title: 'The Grind',
+        body: '4,186 questions across all 6 CCNA domains. Use the spaced repetition (SRS) toggle so the engine schedules reviews automatically — the most efficient way to retain material.',
+        hint: 'Aim for 20–30 questions per day.',
+      },
+      {
+        icon: '⌨️',
+        title: 'CLI Labs',
+        body: '33 terminal simulation labs with real Cisco IOS command validation. The actual CCNA exam includes simulation tasks — muscle memory built here directly transfers.',
+        hint: 'Complete at least one lab per study session.',
+      },
+    ];
+
+    let slide = 0;
+
+    // ── Overlay ──
+    const overlay = document.createElement('div');
+    overlay.id = 'onboarding-overlay';
+    overlay.style.cssText = [
+      'position:fixed;inset:0;z-index:10000',
+      'background:rgba(0,0,0,0.85)',
+      'display:flex;align-items:center;justify-content:center',
+      'padding:16px',
+      'backdrop-filter:blur(2px)',
+    ].join(';');
+
+    // ── Modal ──
+    const modal = document.createElement('div');
+    modal.style.cssText = [
+      'background:#111',
+      'border:1px solid rgba(0,255,65,0.25)',
+      'box-shadow:0 0 40px rgba(0,255,65,0.08)',
+      'border-radius:8px',
+      'width:100%;max-width:480px',
+      'padding:32px',
+      'position:relative',
+      'font-family:\'JetBrains Mono\',\'Fira Code\',Consolas,monospace',
+      'color:#c8ffc8',
+    ].join(';');
+
+    function renderSlide() {
+      const s = SLIDES[slide];
+      const isLast = slide === SLIDES.length - 1;
+
+      modal.innerHTML = `
+        <!-- Skip link -->
+        <button id="ob-skip" style="
+          position:absolute;top:14px;right:16px;
+          background:none;border:none;cursor:pointer;
+          font-size:0.7rem;letter-spacing:0.05em;color:#3a5a3a;
+          font-family:inherit;
+        ">Skip tour ›</button>
+
+        <!-- Progress dots -->
+        <div style="display:flex;gap:6px;margin-bottom:24px;">
+          ${SLIDES.map((_, i) => `
+            <div style="
+              height:3px;flex:1;border-radius:2px;
+              background:${i <= slide ? '#00ff41' : 'rgba(0,255,65,0.15)'};
+              transition:background 0.3s;
+            "></div>
+          `).join('')}
+        </div>
+
+        <!-- Icon + title -->
+        <div style="font-size:2rem;margin-bottom:12px;">${s.icon}</div>
+        <div style="font-size:0.65rem;letter-spacing:0.12em;color:#4a7a4a;margin-bottom:6px;">
+          ${String(slide + 1).padStart(2,'0')} / ${String(SLIDES.length).padStart(2,'0')}
+        </div>
+        <h2 style="font-size:1.25rem;font-weight:800;color:#00ff41;
+                   text-shadow:0 0 8px rgba(0,255,65,0.6);margin-bottom:12px;">
+          ${s.title}
+        </h2>
+        <p style="font-size:0.78rem;line-height:1.7;color:#8fbc8f;margin-bottom:10px;">
+          ${s.body}
+        </p>
+        <div style="
+          font-size:0.7rem;padding:8px 12px;border-radius:4px;margin-bottom:28px;
+          background:rgba(0,255,65,0.05);border-left:2px solid rgba(0,255,65,0.3);
+          color:#5a9a5a;
+        ">💡 ${s.hint}</div>
+
+        <!-- Navigation -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <button id="ob-back" style="
+            background:none;border:1px solid rgba(0,255,65,0.2);
+            color:#4a7a4a;font-family:inherit;font-size:0.75rem;
+            padding:9px 18px;border-radius:4px;cursor:pointer;
+            ${slide === 0 ? 'visibility:hidden;' : ''}
+          ">← Back</button>
+
+          <button id="ob-next" style="
+            background:#00ff41;color:#000;font-family:inherit;
+            font-size:0.75rem;font-weight:700;letter-spacing:0.06em;
+            padding:10px 24px;border-radius:4px;cursor:pointer;border:none;
+          ">${isLast ? 'Set Callsign →' : 'Next →'}</button>
+        </div>
+      `;
+
+      // Wire buttons
+      modal.querySelector('#ob-skip').addEventListener('click', showCallsign);
+      if (slide > 0) {
+        modal.querySelector('#ob-back').addEventListener('click', () => { slide--; renderSlide(); });
+      }
+      modal.querySelector('#ob-next').addEventListener('click', () => {
+        if (isLast) showCallsign();
+        else { slide++; renderSlide(); }
+      });
+    }
+
+    function showCallsign() {
+      modal.innerHTML = `
+        <!-- Skip link removed on callsign screen -->
+        <div style="font-size:0.65rem;letter-spacing:0.12em;color:#4a7a4a;margin-bottom:16px;">
+          CCNA_MASTERY // SYSTEM INIT
+        </div>
+        <div style="font-size:1.5rem;font-weight:800;color:#00ff41;
+                    text-shadow:0 0 8px rgba(0,255,65,0.6);margin-bottom:8px;">
+          Enter Your Callsign
+        </div>
+        <p style="font-size:0.78rem;color:#6a9a6a;margin-bottom:24px;line-height:1.6;">
+          This is your in-game handle. It appears on the HUD and in your stats. You can change it later in Stats.
+        </p>
+        <div style="position:relative;margin-bottom:8px;">
+          <span style="
+            position:absolute;left:12px;top:50%;transform:translateY(-50%);
+            color:#00ff41;font-size:0.8rem;pointer-events:none;
+          ">›</span>
+          <input id="ob-name-input" type="text" maxlength="24"
+            placeholder="Network Cadet"
+            style="
+              width:100%;padding:12px 12px 12px 28px;
+              background:#0a0a0a;border:1px solid rgba(0,255,65,0.35);
+              border-radius:4px;color:#00ff41;font-family:inherit;font-size:0.85rem;
+              caret-color:#00ff41;outline:none;
+            "
+          />
+        </div>
+        <div id="ob-name-err" style="
+          font-size:0.7rem;color:#ff4444;margin-bottom:16px;min-height:1.2em;
+        "></div>
+        <button id="ob-confirm" style="
+          width:100%;background:#00ff41;color:#000;font-family:inherit;
+          font-size:0.8rem;font-weight:700;letter-spacing:0.08em;
+          padding:12px;border-radius:4px;cursor:pointer;border:none;
+        ">CONFIRM CALLSIGN →</button>
+        <button id="ob-use-default" style="
+          display:block;width:100%;margin-top:10px;
+          background:none;border:none;color:#3a5a3a;font-family:inherit;
+          font-size:0.7rem;cursor:pointer;text-align:center;
+        ">Use default (Network Cadet)</button>
+      `;
+
+      const input = modal.querySelector('#ob-name-input');
+      const errEl = modal.querySelector('#ob-name-err');
+
+      input.focus();
+
+      function confirm() {
+        const val = input.value.trim();
+        if (!val) { errEl.textContent = 'Callsign cannot be blank.'; return; }
+        finish(val);
+      }
+
+      modal.querySelector('#ob-confirm').addEventListener('click', confirm);
+      modal.querySelector('#ob-use-default').addEventListener('click', () => finish('Network Cadet'));
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') confirm(); });
+    }
+
+    function finish(name) {
+      store.setPlayerName(name);
+      store.completeOnboarding();
+      document.body.removeChild(overlay);
+      resolve();
+    }
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    renderSlide();
+  });
+}
+
 async function init() {
+  // Kick off content fetch immediately (runs in parallel with boot/onboarding)
+  const contentPromise = fetch('./data/content.json')
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .catch(e => { console.error('[main] Failed to load content.json:', e); return null; });
+
+  // First visit: animated boot sequence (runs during fetch)
+  // Return visit: show minimal loading overlay instead of blank flash
+  if (!store.state.onboardingDone) {
+    await showBoot(contentPromise);
+  } else {
+    showLoadingOverlay();
+  }
+
+  // Await content (may already be resolved if boot took longer than fetch)
+  let rawContent = await contentPromise;
+
+  // On failure: show error + await retry, then re-fetch
+  while (!rawContent) {
+    hideLoadingOverlay();
+    await showContentError();
+    showLoadingOverlay();
+    rawContent = await fetch('./data/content.json')
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .catch(e => { console.error('[main] Retry failed:', e); return null; });
+  }
+
+  hideLoadingOverlay();
+
   try {
-    const res = await fetch('./data/content.json');
-    content = await res.json();
-    // Flatten scenario questions into individual sub-questions, each carrying
-    // scenario_text so the renderer can display the context block above the question.
+    // Flatten scenario questions into individual sub-questions
     const flattened = [];
-    for (const q of content.questions) {
+    for (const q of rawContent.questions) {
       if (q.type !== 'scenario') { flattened.push(q); continue; }
       (q.sub_questions || []).forEach((sub, i) => {
         flattened.push({
@@ -145,9 +658,10 @@ async function init() {
         });
       });
     }
-    content.questions = flattened;
+    rawContent.questions = flattened;
+    content = rawContent;
   } catch (e) {
-    console.error('[main] Failed to load content.json:', e);
+    console.error('[main] Failed to process content:', e);
     content = { questions: [], labs: [], bossBattles: [], storyBeats: [] };
   }
 
@@ -155,14 +669,9 @@ async function init() {
   store.checkStreak();
   _viewEnterTime = Date.now(); // start study timer from app launch
 
-  // Player name prompt on first launch — loop until non-blank or cancelled
-  if (!store.state.playerName || store.state.playerName === 'Network Cadet') {
-    let name = null;
-    do {
-      name = prompt('Enter your callsign (player name):', '');
-      if (name === null) break; // user cancelled — keep default
-    } while (!name.trim());
-    if (name !== null && name.trim()) store.setPlayerName(name.trim());
+  // First-run onboarding tour (only if never completed)
+  if (!store.state.onboardingDone) {
+    await showOnboarding();
   }
 
   initHUD();
@@ -183,9 +692,293 @@ function initHUD() {
     toastContainer:  document.getElementById('toast-container'),
     weekBadge:       document.getElementById('hud-week'),
   });
+  initThemePicker();
 }
 
-// ─── Navigation ───────────────────────────────────────────────────────────────
+// ─── Theming ──────────────────────────────────────────────────────────────────
+
+const THEME_UNLOCK = { amber: 5, blue: 8 }; // min level required
+
+/** Apply a theme by setting data-theme on <html> and persisting to store. */
+function applyTheme(theme) {
+  const level = store.state.level;
+  // Enforce level gates
+  if (THEME_UNLOCK[theme] && level < THEME_UNLOCK[theme]) return;
+
+  const html = document.documentElement;
+  if (theme === 'terminal-green') {
+    html.removeAttribute('data-theme');
+  } else {
+    html.setAttribute('data-theme', theme);
+  }
+  store.setTheme(theme);
+  _syncThemeSwatches(theme);
+}
+
+/** Sync swatch active state and lock/unlock classes based on current level. */
+function _syncThemeSwatches(activeTheme) {
+  const level = store.state.level;
+  document.querySelectorAll('.theme-swatch').forEach(btn => {
+    const t = btn.dataset.themeId;
+    const minLevel = THEME_UNLOCK[t];
+    const unlocked = !minLevel || level >= minLevel;
+
+    btn.classList.toggle('active', t === activeTheme);
+    btn.classList.toggle('locked', !unlocked);
+
+    // Update lock icon visibility and title
+    const lockEl = btn.querySelector('.lock-icon');
+    if (lockEl) lockEl.style.display = unlocked ? 'none' : '';
+    if (minLevel) {
+      btn.title = unlocked
+        ? (t === 'amber' ? 'Amber (unlocked at Level 5)' : 'Cyan (unlocked at Level 8)')
+        : (t === 'amber' ? `Amber — unlocks at Level 5 (you are Level ${level})` : `Cyan — unlocks at Level 8 (you are Level ${level})`);
+    }
+  });
+}
+
+function initThemePicker() {
+  const currentTheme = store.state.settings?.theme || 'terminal-green';
+
+  // Apply stored theme immediately
+  if (currentTheme !== 'terminal-green') {
+    const level = store.state.level;
+    if (!THEME_UNLOCK[currentTheme] || level >= THEME_UNLOCK[currentTheme]) {
+      document.documentElement.setAttribute('data-theme', currentTheme);
+    }
+  }
+  _syncThemeSwatches(currentTheme);
+
+  // Wire swatch clicks
+  document.querySelectorAll('.theme-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('locked')) return;
+      applyTheme(btn.dataset.themeId);
+    });
+  });
+
+  // Re-sync swatches on level-up (may unlock a new theme)
+  bus.on('level:up', ({ level }) => {
+    _syncThemeSwatches(store.state.settings?.theme || 'terminal-green');
+    // Notify player if a theme just unlocked
+    if (level === THEME_UNLOCK.amber) {
+      setTimeout(() => {
+        const tc = document.getElementById('toast-container');
+        if (tc) {
+          const t = document.createElement('div');
+          t.className = 'px-4 py-3 rounded border text-sm bg-yellow-900 border-yellow-600 text-yellow-200';
+          t.innerHTML = '🎨 Amber theme unlocked! Select it in the sidebar.';
+          tc.appendChild(t);
+          setTimeout(() => t.remove(), 4000);
+        }
+      }, 600);
+    }
+    if (level === THEME_UNLOCK.blue) {
+      setTimeout(() => {
+        const tc = document.getElementById('toast-container');
+        if (tc) {
+          const t = document.createElement('div');
+          t.className = 'px-4 py-3 rounded border text-sm bg-cyan-900 border-cyan-600 text-cyan-200';
+          t.innerHTML = '🎨 Cyan theme unlocked! Select it in the sidebar.';
+          tc.appendChild(t);
+          setTimeout(() => t.remove(), 4000);
+        }
+      }, 600);
+    }
+  });
+}
+
+// ─── Navigation & Discoverability ─────────────────────────────────────────────
+
+const VIEW_META = {
+  story:     { label: 'Story Mode',   desc: 'Narrative campaign — 6 weeks, 1 boss per week',
+               tip: 'Read each beat, then complete the suggested quiz and lab to unlock the next chapter. Follow the weeks in order.' },
+  grind:     { label: 'The Grind',    desc: '4,186 questions · SRS · domain filtering',
+               tip: 'Enable SRS for the most efficient study — the engine schedules reviews at optimal intervals. Aim for 20–30 questions per session.' },
+  lab:       { label: 'The Lab',      desc: '33 CLI labs · Cisco IOS simulation',
+               tip: 'Type commands exactly as you would on real Cisco hardware. Use the "hint" button if stuck. Complete at least one lab per study session.' },
+  exam:      { label: 'Exam Sim',     desc: '120 questions · 120 minutes · real CCNA format',
+               tip: 'Take a full exam at the end of each week to measure your readiness. Aim for 85%+ before booking the real thing (820/1000 = pass).' },
+  boss:      { label: 'Boss Battles', desc: 'End-of-week combat encounters',
+               tip: 'Bosses unlock when you reach the right week. Answer quickly — wrong answers cost HP. Perfect runs earn bonus XP.' },
+  stats:     { label: 'Stats',        desc: 'Readiness score, radar, heatmap, planner',
+               tip: 'Set your exam date in the Study Planner to unlock the daily hours target and countdown. Check the radar chart weekly to spot weak domains.' },
+  subnet:    { label: 'Subnetting',   desc: 'Rapid-fire subnet drill',
+               tip: 'Practice until /24–/30 splits take under 30 seconds. The real exam includes subnetting in many questions — speed matters.' },
+  flash:     { label: 'Flashcards',   desc: 'SRS-rated flip cards · swipe gestures',
+               tip: 'Space to flip, ← for Missed, → for Got It. Self-rating feeds the SRS scheduler — be honest. Filter to "SRS Due" for the most efficient review.' },
+  reference: { label: 'Reference',   desc: 'Offline cheat-sheet library',
+               tip: 'Use keyword search to find any topic instantly. Great to have open alongside a quiz session or CLI lab for quick look-ups.' },
+  notebook:  { label: 'Notebook',    desc: 'Mistakes and flagged questions',
+               tip: 'Questions you get wrong twice appear here automatically. Use "Drill" to re-quiz just your weak spots. Review before every study session.' },
+  inventory: { label: 'Inventory',   desc: 'Items and achievements',
+               tip: 'Each item has a passive mechanical effect — Console Cable adds hints, Packet Sniffer gives +10% lab XP. Earn items by reaching new levels.' },
+};
+
+/** Update the top-bar breadcrumb label and optional context string. */
+function _updateBreadcrumb(view, context = '') {
+  const meta = VIEW_META[view];
+  const labelEl   = document.getElementById('current-view-label');
+  const contextEl = document.getElementById('view-context');
+  if (labelEl)   labelEl.textContent = meta ? meta.label : view;
+  if (contextEl) {
+    contextEl.textContent = context ? ` › ${context}` : (meta ? ` · ${meta.desc}` : '');
+  }
+}
+
+/** Show a dismissable tip banner at the top of the view area on first visit. */
+function _showTipBannerIfNew(view, viewEl) {
+  if (!viewEl || store.hasVisitedView(view)) return;
+  store.markViewVisited(view);
+
+  const meta = VIEW_META[view];
+  if (!meta?.tip) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'tip-banner';
+  banner.style.cssText = [
+    'display:flex;align-items:flex-start;gap:10px',
+    'margin:12px 16px 0',
+    'padding:10px 14px',
+    'background:rgba(0,255,65,0.05)',
+    'border:1px solid rgba(0,255,65,0.18)',
+    'border-left:3px solid rgba(0,255,65,0.5)',
+    'border-radius:4px',
+    'font-family:\'JetBrains Mono\',monospace',
+    'font-size:0.72rem',
+    'line-height:1.6',
+    'color:#6a9a6a',
+    'animation:fadeUp 0.4s ease both',
+  ].join(';');
+
+  banner.innerHTML = `
+    <span style="color:#00ff41;font-size:1rem;flex-shrink:0;margin-top:1px;">💡</span>
+    <span style="flex:1;"><strong style="color:#8fbc8f;">First time here?</strong> ${meta.tip}</span>
+    <button id="tip-dismiss" style="
+      background:none;border:none;cursor:pointer;color:#3a5a3a;
+      font-size:1rem;line-height:1;padding:0 0 0 8px;flex-shrink:0;
+      font-family:inherit;
+    " title="Dismiss" aria-label="Dismiss tip">✕</button>`;
+
+  // Prepend inside the first child container or directly
+  const firstChild = viewEl.firstElementChild;
+  if (firstChild) {
+    viewEl.insertBefore(banner, firstChild);
+  } else {
+    viewEl.appendChild(banner);
+  }
+
+  banner.querySelector('#tip-dismiss').addEventListener('click', () => {
+    banner.style.transition = 'opacity 0.25s';
+    banner.style.opacity = '0';
+    setTimeout(() => banner.remove(), 250);
+  });
+
+  // Auto-dismiss after 12s
+  setTimeout(() => {
+    if (banner.isConnected) {
+      banner.style.transition = 'opacity 0.6s';
+      banner.style.opacity = '0';
+      setTimeout(() => banner.remove(), 600);
+    }
+  }, 12000);
+}
+
+/** Keyboard shortcut cheat-sheet modal (opened with `?`). */
+function showShortcutsModal() {
+  if (document.getElementById('shortcuts-modal')) return; // already open
+
+  const overlay = document.createElement('div');
+  overlay.id = 'shortcuts-modal';
+  overlay.style.cssText = [
+    'position:fixed;inset:0;z-index:10000',
+    'background:rgba(0,0,0,0.82)',
+    'display:flex;align-items:center;justify-content:center',
+    'padding:16px',
+    'backdrop-filter:blur(2px)',
+  ].join(';');
+
+  const modal = document.createElement('div');
+  modal.style.cssText = [
+    'background:#111;border:1px solid rgba(0,255,65,0.25)',
+    'box-shadow:0 0 40px rgba(0,255,65,0.07)',
+    'border-radius:8px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto',
+    'padding:28px',
+    'font-family:\'JetBrains Mono\',\'Fira Code\',Consolas,monospace',
+    'color:#c8ffc8',
+  ].join(';');
+
+  const sections = [
+    {
+      title: 'Quiz & Exam',
+      rows: [
+        ['1 / 2 / 3 / 4  or  A / B / C / D', 'Select multiple-choice option'],
+        ['T  or  Y', 'Answer True'],
+        ['F  or  N', 'Answer False'],
+        ['1–4  (multi-select)', 'Toggle checkbox options'],
+        ['Enter  or  Space', 'Submit multi-select answer'],
+        ['N  or  →', 'Next question (after reveal)'],
+      ],
+    },
+    {
+      title: 'Flashcards',
+      rows: [
+        ['Space', 'Flip card (question → answer)'],
+        ['→  or  C', 'Got it ✓ (correct)'],
+        ['←  or  X', 'Missed ✗ (wrong)'],
+      ],
+    },
+    {
+      title: 'General',
+      rows: [
+        ['?', 'Open this shortcuts guide'],
+        ['Escape', 'Close any modal'],
+      ],
+    },
+  ];
+
+  const sectionsHtml = sections.map(s => `
+    <div style="margin-bottom:20px;">
+      <div style="font-size:0.65rem;letter-spacing:0.12em;color:#4a7a4a;text-transform:uppercase;margin-bottom:10px;">
+        ${s.title}
+      </div>
+      ${s.rows.map(([key, desc]) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:5px 0;border-bottom:1px solid rgba(0,255,65,0.06);">
+          <code style="background:rgba(0,255,65,0.08);border:1px solid rgba(0,255,65,0.2);
+                       padding:2px 8px;border-radius:3px;font-size:0.72rem;
+                       color:#00ff41;letter-spacing:0.04em;">${key}</code>
+          <span style="font-size:0.74rem;color:#6a9a6a;text-align:right;max-width:60%;">${desc}</span>
+        </div>`).join('')}
+    </div>`).join('');
+
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div>
+        <div style="font-size:0.65rem;letter-spacing:0.12em;color:#4a7a4a;margin-bottom:4px;">// KEYBOARD_SHORTCUTS</div>
+        <div style="font-size:1.1rem;font-weight:800;color:#00ff41;
+                    text-shadow:0 0 8px rgba(0,255,65,0.6);">Shortcut Reference</div>
+      </div>
+      <button id="shortcuts-close" style="
+        background:none;border:1px solid rgba(0,255,65,0.2);color:#4a7a4a;
+        font-family:inherit;font-size:0.75rem;padding:6px 14px;border-radius:4px;cursor:pointer;
+      ">Close ✕</button>
+    </div>
+    ${sectionsHtml}
+    <div style="font-size:0.65rem;color:#2a4a2a;text-align:center;margin-top:4px;">
+      Press <code style="color:#3a6a3a;">Escape</code> or click outside to close
+    </div>`;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  function close() { overlay.remove(); }
+  modal.querySelector('#shortcuts-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function onEsc(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); }
+  });
+}
 
 function initNav() {
   document.querySelectorAll('[data-nav]').forEach(btn => {
@@ -193,6 +986,46 @@ function initNav() {
   });
 
   bus.on('nav:switch', ({ view }) => switchView(view));
+
+  // `?` opens keyboard shortcut guide (when not typing in an input/textarea)
+  document.addEventListener('keydown', e => {
+    if (e.key === '?' && !['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)) {
+      showShortcutsModal();
+    }
+  });
+
+  // Mobile long-press (500ms) on nav buttons shows a floating tooltip
+  document.querySelectorAll('.nav-btn[title]').forEach(btn => {
+    let pressTimer = null;
+    let tipEl = null;
+
+    function showTip() {
+      if (tipEl) return;
+      tipEl = document.createElement('div');
+      tipEl.style.cssText = [
+        'position:fixed;z-index:9990',
+        'background:#1a1a1a;border:1px solid rgba(0,255,65,0.3)',
+        'border-radius:4px;padding:8px 12px',
+        'font-family:\'JetBrains Mono\',monospace;font-size:0.7rem;color:#8fbc8f',
+        'max-width:220px;line-height:1.5;pointer-events:none',
+        'box-shadow:0 4px 20px rgba(0,0,0,0.6)',
+      ].join(';');
+      tipEl.textContent = btn.getAttribute('title');
+      document.body.appendChild(tipEl);
+
+      const rect = btn.getBoundingClientRect();
+      tipEl.style.left = `${rect.right + 8}px`;
+      tipEl.style.top  = `${rect.top}px`;
+    }
+    function hideTip() {
+      if (tipEl) { tipEl.remove(); tipEl = null; }
+      clearTimeout(pressTimer);
+    }
+
+    btn.addEventListener('pointerdown', () => { pressTimer = setTimeout(showTip, 500); });
+    btn.addEventListener('pointerup',   hideTip);
+    btn.addEventListener('pointerleave',hideTip);
+  });
 
   // ── Story gating: unlock next beat on milestone events ──────────────────
 
@@ -263,6 +1096,8 @@ function switchView(view) {
     btn.classList.toggle('nav-active', btn.dataset.nav === view);
   });
 
+  _updateBreadcrumb(view);
+
   switch (view) {
     case 'story':    renderStory();    break;
     case 'lab':      renderLab();      break;
@@ -277,6 +1112,12 @@ function switchView(view) {
     case 'inventory':renderInventory();break;
     default: break;
   }
+
+  // Show first-visit tip banner (skipped for story/lab/grind — they have rich enough entry UX)
+  if (!['story', 'lab'].includes(view)) {
+    _showTipBannerIfNew(view, getView());
+  }
+
   // Start timer AFTER render so any secondary switchView calls inside render don't corrupt it
   _viewEnterTime = Date.now();
 }
@@ -409,6 +1250,133 @@ function _renderMissionCard() {
 }
 
 /** Render the "3 Weakest Topics" compact card on the home/story screen. */
+/** Deterministic hash of a date string → stable index for daily question pick. */
+function _dailySeed(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function _pickDailyQuestion() {
+  // Pool: MC and true/false questions only (simple to answer inline)
+  const pool = content.questions.filter(q =>
+    (q.type === 'multiple_choice' || q.type === 'true_false') && !q.scenario_text
+  );
+  if (!pool.length) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const idx = _dailySeed(today) % pool.length;
+  return pool[idx];
+}
+
+function _renderDailyChallenge() {
+  const el = document.getElementById('daily-challenge-card');
+  if (!el) return;
+
+  const q = _pickDailyQuestion();
+  if (!q) { el.innerHTML = ''; return; }
+
+  // Register today's question in store (idempotent)
+  store.setDailyChallengeQuestion(q.id);
+  const entry = store.getDailyChallengeEntry();
+  const done  = entry?.completed;
+
+  if (done) {
+    // Greyed-out completed state
+    el.innerHTML = `
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-3 opacity-60">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-mono text-gray-600 uppercase tracking-widest">⚡ Daily Challenge</span>
+          <span class="text-xs text-green-600 font-bold">✓ Completed · +${entry.xpAwarded} XP</span>
+        </div>
+        <p class="text-gray-600 text-xs italic">Come back tomorrow for a new challenge.</p>
+      </div>`;
+    return;
+  }
+
+  // Active challenge
+  const optionsHtml = q.type === 'multiple_choice'
+    ? (q.options || []).map((opt, i) => `
+        <button class="dc-opt w-full text-left px-3 py-2 text-xs border border-gray-700
+          hover:border-green-600 hover:bg-green-900/20 rounded transition-colors"
+          data-idx="${i}">${String.fromCharCode(65 + i)}. ${opt}</button>`).join('')
+    : `<div class="flex gap-2">
+        <button class="dc-opt flex-1 py-2 text-xs border border-gray-700 hover:border-green-500 rounded transition-colors" data-idx="true">True</button>
+        <button class="dc-opt flex-1 py-2 text-xs border border-gray-700 hover:border-red-500 rounded transition-colors" data-idx="false">False</button>
+      </div>`;
+
+  el.innerHTML = `
+    <div id="dc-card" class="bg-gray-900 border border-yellow-900/60 rounded-lg p-4 mb-3">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-mono text-yellow-600 uppercase tracking-widest">⚡ Daily Challenge</span>
+        <span class="text-xs font-bold text-yellow-500 bg-yellow-900/40 border border-yellow-800 rounded px-2 py-0.5">+50 XP bonus</span>
+      </div>
+      <p class="text-sm text-gray-200 mb-3 leading-relaxed">${q.question}</p>
+      <div id="dc-options" class="space-y-1.5">${optionsHtml}</div>
+      <div id="dc-feedback" class="hidden mt-3 text-xs p-2 rounded"></div>
+      <div class="mt-2 text-right">
+        <span class="text-[10px] text-gray-700 font-mono">${q.domain} · ${q.difficulty || 'medium'}</span>
+      </div>
+    </div>`;
+
+  // Wire answer buttons
+  el.querySelectorAll('.dc-opt').forEach(btn => {
+    btn.addEventListener('click', () => _submitDailyChallenge(q, btn.dataset.idx, el));
+  });
+}
+
+function _submitDailyChallenge(q, answer, containerEl) {
+  // Disable all buttons immediately
+  containerEl.querySelectorAll('.dc-opt').forEach(b => {
+    b.disabled = true; b.style.pointerEvents = 'none';
+  });
+
+  const correct = String(q.correct_answer) === String(answer);
+  const feedback = containerEl.querySelector('#dc-feedback');
+
+  // Highlight chosen button
+  const chosenBtn = containerEl.querySelector(`.dc-opt[data-idx="${answer}"]`);
+  if (chosenBtn) {
+    if (correct) {
+      chosenBtn.classList.add('border-green-500', 'bg-green-900/30', 'text-green-300');
+      chosenBtn.classList.remove('border-gray-700');
+      spawnFloatingXP(50, chosenBtn);
+    } else {
+      chosenBtn.classList.add('border-red-600', 'bg-red-900/20', 'text-red-300');
+      chosenBtn.classList.remove('border-gray-700');
+      // Show correct answer
+      const correctBtn = containerEl.querySelector(`.dc-opt[data-idx="${q.correct_answer}"]`);
+      if (correctBtn) correctBtn.classList.add('border-green-600', 'bg-green-900/20', 'text-green-400');
+    }
+  }
+
+  if (feedback) {
+    feedback.classList.remove('hidden');
+    feedback.className = `mt-3 text-xs p-2 rounded ${correct
+      ? 'bg-green-900 border border-green-700 text-green-300'
+      : 'bg-red-900 border border-red-800 text-red-300'}`;
+    feedback.innerHTML = `<strong>${correct ? '✓ Correct!' : '✗ Incorrect'}</strong>
+      ${correct ? ' +50 XP bonus awarded.' : ''}
+      ${q.explanation ? `<span class="opacity-80 ml-1">${q.explanation}</span>` : ''}`;
+  }
+
+  // Award XP and mark complete (regardless of correct/wrong — daily challenges reward participation)
+  store.completeDailyChallenge(q.id);
+
+  // Fade card to greyed state after a short delay
+  setTimeout(() => {
+    const card = containerEl.querySelector('#dc-card');
+    if (card) {
+      card.style.transition = 'opacity 0.6s';
+      card.style.opacity = '0.55';
+      card.style.borderColor = 'rgba(107,114,128,0.3)';
+    }
+    const header = containerEl.querySelector('.text-yellow-600');
+    if (header) header.textContent = '⚡ Daily Challenge';
+    const badge = containerEl.querySelector('.text-yellow-500');
+    if (badge) { badge.textContent = '✓ Completed · +50 XP'; badge.className = 'text-xs font-bold text-green-600'; }
+  }, 2500);
+}
+
 function _renderWeakCard() {
   const el = document.getElementById('weak-card');
   if (!el) return;
@@ -472,10 +1440,12 @@ function renderStory() {
   view.innerHTML = `
     <div class="max-w-3xl mx-auto">
       <div id="mission-card" class="px-6 pt-5"></div>
+      <div id="daily-challenge-card" class="px-6 pb-1"></div>
       <div id="weak-card" class="px-6 pb-1"></div>
       <div id="story-container" class="p-6"></div>
     </div>`;
   _renderMissionCard();
+  _renderDailyChallenge();
   _renderWeakCard();
   story = new StoryMode(content.storyBeats, store, document.getElementById('story-container'));
   story.showCurrentBeat();
@@ -744,7 +1714,28 @@ function startQuiz() {
 
   quiz = new QuizEngine(pool, store, { domain, difficulty, count: 20, shuffle: !srsOn, srs: srsOn, requeueWrong: requeueOn });
 
-  if (!quiz.start()) return;
+  if (!quiz.start()) {
+    // No questions matched the current filters — show inline empty state
+    const prompt = document.getElementById('quiz-prompt');
+    if (prompt) {
+      prompt.classList.remove('hidden');
+      prompt.innerHTML = `
+        <div class="inline-flex flex-col items-center gap-3 py-10">
+          <div class="text-3xl opacity-40">🔍</div>
+          <p class="text-yellow-400 font-semibold text-sm">No questions match these filters</p>
+          <p class="text-gray-500 text-xs max-w-xs">
+            Try a different domain, week, or difficulty — or clear all filters to drill the full question bank.
+          </p>
+          <button onclick="document.getElementById('quiz-domain').value='all';
+                           document.getElementById('quiz-week').value='all';
+                           document.getElementById('quiz-difficulty').value='all';"
+            class="mt-1 px-4 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-600 transition-colors">
+            Clear filters
+          </button>
+        </div>`;
+    }
+    return;
+  }
   document.getElementById('quiz-prompt')?.classList.add('hidden');
   renderQuizQuestion();
 }
@@ -939,6 +1930,23 @@ function submitQuizAnswer(answer) {
       <span class="font-bold">${result.correct ? '✓ Correct!' : '✗ Incorrect'}</span>
       ${result.xpGained ? ` <span class="text-green-400 text-xs ml-2">+${result.xpGained} XP</span>` : ''}
       ${result.explanation ? `<p class="mt-1 text-xs opacity-80">${result.explanation}</p>` : ''}`;
+  }
+
+  // Flash/shake the chosen answer button
+  const chosenBtn = document.querySelector(`.quiz-option[data-answer="${answer}"]`);
+  if (chosenBtn) {
+    if (result.correct) {
+      chosenBtn.classList.add('answer-flash-correct');
+      if (result.xpGained) spawnFloatingXP(result.xpGained, chosenBtn);
+    } else {
+      chosenBtn.classList.add('answer-shake');
+    }
+    chosenBtn.addEventListener('animationend', () => {
+      chosenBtn.classList.remove('answer-flash-correct', 'answer-shake');
+    }, { once: true });
+  } else if (result.correct && result.xpGained) {
+    // Fallback: no specific button matched (drag/fill), still show float
+    spawnFloatingXP(result.xpGained, feedback);
   }
 
   // Disable answer buttons / reveal multi-select colours
@@ -1184,6 +2192,21 @@ function _renderHeatmap(containerId) {
 function _drawRadar(canvasId, labels, values) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
+
+  // Animate polygon growing from centre over 650ms with easeOutCubic
+  const startTime = performance.now();
+  const duration  = 650;
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function frame(now) {
+    const progress = easeOut(Math.min(1, (now - startTime) / duration));
+    _drawRadarFrame(canvas, labels, values, progress);
+    if (progress < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function _drawRadarFrame(canvas, labels, values, progress) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   const cx = W / 2, cy = H / 2;
@@ -1220,29 +2243,29 @@ function _drawRadar(canvasId, labels, values) {
     ctx.stroke();
   }
 
-  // Data polygon fill
+  // Data polygon fill — scaled by animation progress
   ctx.beginPath();
   for (let i = 0; i < n; i++) {
     const a   = start + i * step;
-    const val = Math.min(1, Math.max(0, (values[i] || 0) / 100));
+    const val = Math.min(1, Math.max(0, (values[i] || 0) / 100)) * progress;
     const x   = cx + Math.cos(a) * r * val;
     const y   = cy + Math.sin(a) * r * val;
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   }
   ctx.closePath();
-  ctx.fillStyle   = 'rgba(6,182,212,0.18)';
+  ctx.fillStyle   = `rgba(6,182,212,${0.18 * progress})`;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(6,182,212,0.9)';
+  ctx.strokeStyle = `rgba(6,182,212,${0.9 * progress})`;
   ctx.lineWidth   = 2;
   ctx.stroke();
 
-  // Data point dots
+  // Data point dots — fade in with progress
   for (let i = 0; i < n; i++) {
     const a   = start + i * step;
-    const val = Math.min(1, Math.max(0, (values[i] || 0) / 100));
+    const val = Math.min(1, Math.max(0, (values[i] || 0) / 100)) * progress;
     ctx.beginPath();
     ctx.arc(cx + Math.cos(a) * r * val, cy + Math.sin(a) * r * val, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgb(6,182,212)';
+    ctx.fillStyle = `rgba(6,182,212,${progress})`;
     ctx.fill();
   }
 
@@ -1445,7 +2468,14 @@ function renderStats() {
           <span class="${s.score >= 80 ? 'text-green-400' : s.score >= 60 ? 'text-yellow-400' : 'text-red-400'}">${s.score}%  ${s.correct}/${s.total}</span>
         </div>`;
       }).join('')
-    : '<p class="text-gray-600 text-xs py-2">No sessions recorded yet.</p>';
+    : `<div class="py-4 text-center">
+        <p class="text-gray-600 text-xs">No sessions recorded yet.</p>
+        <p class="text-gray-700 text-xs mt-1">Complete your first Grind or Exam session to see history here.</p>
+        <button onclick="window.switchView('grind')"
+          class="mt-3 px-4 py-1.5 text-xs bg-green-900 hover:bg-green-800 text-green-300 rounded border border-green-800 transition-colors">
+          ▶ Start a Session
+        </button>
+      </div>`;
 
   // Exam history (last 10 exam runs with per-domain breakdown)
   const examHistory = (store.state.examHistory || []).slice().reverse();
@@ -1477,7 +2507,14 @@ function renderStats() {
             </div>
           </div>`;
       }).join('')
-    : '<p class="text-gray-600 text-xs py-2">No exam runs recorded yet. Take an exam to see your history here.</p>';
+    : `<div class="py-4 text-center">
+        <p class="text-gray-600 text-xs">No exam runs recorded yet.</p>
+        <p class="text-gray-700 text-xs mt-1">Take a full timed exam to track your domain scores and readiness progress.</p>
+        <button onclick="window.switchView('exam')"
+          class="mt-3 px-4 py-1.5 text-xs bg-yellow-900 hover:bg-yellow-800 text-yellow-300 rounded border border-yellow-800 transition-colors">
+          ▶ Take Exam Sim
+        </button>
+      </div>`;
 
   const studyHrs   = store.studyHours;
   const GOAL_HRS   = 300;
@@ -2342,7 +3379,15 @@ function startBossBattle(bossData) {
   // Sync HP via events
   bus.on('boss:damage', ({ hp }) => {
     const pct = Math.max(0, (hp / 100) * 100);
-    document.getElementById('player-hp-bar').style.width = pct + '%';
+    const bar = document.getElementById('player-hp-bar');
+    if (bar) {
+      bar.style.width = pct + '%';
+      bar.classList.remove('hp-damage-flash');
+      // Force reflow to restart animation
+      void bar.offsetWidth;
+      bar.classList.add('hp-damage-flash');
+      bar.addEventListener('animationend', () => bar.classList.remove('hp-damage-flash'), { once: true });
+    }
     document.getElementById('player-hp-text').textContent = `${hp} HP`;
   });
   bus.on('boss:tick', ({ elapsed, bossHp }) => {
@@ -2874,7 +3919,7 @@ function renderReference() {
 
   const sections = [
     {
-      id: 'cidr', title: 'Subnetting & CIDR',
+      id: 'cidr', title: 'Subnetting & CIDR', diagramId: 'subnetting',
       content: T(
         ['CIDR','Subnet Mask','Block Size','Hosts/Subnet','Subnets from /24'],
         [
@@ -2933,7 +3978,7 @@ function renderReference() {
       )
     },
     {
-      id: 'osi', title: 'OSI vs TCP/IP Model',
+      id: 'osi', title: 'OSI vs TCP/IP Model', diagramId: 'osi',
       content: T(
         ['OSI Layer','TCP/IP Layer','PDU','Key Protocols'],
         [
@@ -2971,7 +4016,7 @@ function renderReference() {
       </div>`
     },
     {
-      id: 'stp', title: 'STP — States, Roles & Timers',
+      id: 'stp', title: 'STP — States, Roles & Timers', diagramId: 'stp',
       content: `<div class="space-y-3">` +
         T(['Port State','Sends BPDUs','Learns MACs','Forwards Traffic','Duration'],
           [
@@ -3005,7 +4050,7 @@ function renderReference() {
         </div></div>`
     },
     {
-      id: 'ospf', title: 'OSPF LSA Types & Area Types',
+      id: 'ospf', title: 'OSPF LSA Types & Area Types', diagramId: 'ospf',
       content: T(['LSA Type','Generated By','Scope','Description'],
         [
           ['Type 1 — Router','Every router','Within area','Describes router links; every router creates one'],
@@ -3027,7 +4072,7 @@ function renderReference() {
       ) + `</div>`
     },
     {
-      id: 'ipv6', title: 'IPv6 Address Types',
+      id: 'ipv6', title: 'IPv6 Address Types', diagramId: 'ipv6',
       content: T(['Type','Prefix','Scope','Notes'],
         [
           ['Global Unicast','2000::/3','Global (internet)','Like public IPv4; routable everywhere'],
@@ -3203,11 +4248,21 @@ function renderReference() {
   const sectionHtml = sections.map(s => `
     <div class="ref-section" data-ref-id="${s.id}">
       <button class="ref-toggle w-full flex items-center justify-between text-left px-4 py-3 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded transition-colors">
-        <span class="text-sm font-semibold text-gray-200">${s.title}</span>
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-gray-200">${s.title}</span>
+          ${s.diagramId ? `<span class="text-xs text-green-600 border border-green-900 rounded px-1.5 py-0.5">📐 diagram</span>` : ''}
+        </div>
         <span class="ref-caret text-gray-500 text-xs">▶</span>
       </button>
       <div class="ref-body hidden border border-t-0 border-gray-700 rounded-b px-4 py-4 bg-gray-950">
         ${s.content}
+        ${s.diagramId ? `
+        <div class="mt-4 border-t border-gray-800 pt-4">
+          <button class="ref-deepdive-btn flex items-center gap-2 text-xs text-green-500 hover:text-green-300 transition-colors" data-diagram="${s.diagramId}">
+            <span class="ref-deepdive-caret">▶</span> 📐 Interactive Diagram
+          </button>
+          <div class="ref-deepdive-panel hidden mt-3 p-3 bg-black border border-green-900/40 rounded"></div>
+        </div>` : ''}
       </div>
     </div>`
   ).join('');
@@ -3225,6 +4280,23 @@ function renderReference() {
       </div>
       <p id="ref-no-results" class="hidden text-center text-gray-600 text-sm py-8">No sections match your search.</p>
     </div>`;
+
+  // Deep Dive diagram toggle (event delegation on ref-list)
+  document.getElementById('ref-list')?.addEventListener('click', e => {
+    const ddBtn = e.target.closest('.ref-deepdive-btn');
+    if (ddBtn) {
+      const panel  = ddBtn.parentElement.querySelector('.ref-deepdive-panel');
+      const caret  = ddBtn.querySelector('.ref-deepdive-caret');
+      const isOpen = !panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', isOpen);
+      if (caret) caret.textContent = isOpen ? '▶' : '▼';
+      if (!isOpen && panel.dataset.loaded !== '1') {
+        panel.dataset.loaded = '1';
+        renderDiagram(ddBtn.dataset.diagram, panel);
+      }
+      return;
+    }
+  });
 
   // Collapse toggle
   document.getElementById('ref-list')?.addEventListener('click', e => {
@@ -3273,6 +4345,119 @@ function renderReference() {
 
 // ─── Mistake Notebook ─────────────────────────────────────────────────────────
 
+function _exportNotebook() {
+  const questionMap = {};
+  content.questions.forEach(q => { questionMap[q.id] = q; });
+
+  const flaggedIds  = store.getFlaggedIds();
+  const allMistakes = Object.entries(store.state.mistakeNotebook || {})
+    .sort(([, a], [, b]) => b - a);
+
+  const today = new Date().toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' });
+  const lines = [];
+
+  lines.push('# CCNA Mastery — Study Notebook Export');
+  lines.push(`Generated: ${today}  ·  Player: ${store.state.playerName}`);
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+
+  function formatQuestion(q, prefix = '') {
+    if (!q) return [];
+    const out = [];
+    out.push(`**Q:** ${q.question}`);
+    out.push('');
+
+    if (q.type === 'multiple_choice' && q.options) {
+      out.push('**Options:**');
+      q.options.forEach((opt, i) => {
+        const letter = String.fromCharCode(65 + i);
+        const isCorrect = String(i) === String(q.correct_answer);
+        out.push(`- ${letter}. ${opt}${isCorrect ? ' ← ✓ CORRECT' : ''}`);
+      });
+      out.push('');
+      const correctLetter = String.fromCharCode(65 + Number(q.correct_answer));
+      out.push(`**Answer:** ${correctLetter}. ${q.options[q.correct_answer] || ''}`);
+    } else if (q.type === 'true_false') {
+      const ans = String(q.correct_answer).toLowerCase() === 'true' ? 'True' : 'False';
+      out.push(`**Answer:** ${ans}`);
+    } else if (q.type === 'multi_select' && q.options) {
+      out.push('**Options (select all that apply):**');
+      const correct = Array.isArray(q.correct_answer) ? q.correct_answer.map(String) : [String(q.correct_answer)];
+      q.options.forEach((opt, i) => {
+        const isCorrect = correct.includes(String(i));
+        out.push(`- [${isCorrect ? 'x' : ' '}] ${opt}`);
+      });
+    } else if (q.type === 'drag_drop') {
+      out.push('**Correct order:**');
+      const items = Array.isArray(q.correct_answer) ? q.correct_answer : [];
+      items.forEach((item, i) => out.push(`${i + 1}. ${item}`));
+    }
+
+    if (q.explanation) {
+      out.push('');
+      out.push(`**Explanation:** ${q.explanation}`);
+    }
+    if (q.source_ref) {
+      out.push('');
+      out.push(`**Source:** ${q.source_ref}`);
+    }
+    out.push('');
+    out.push(`*${q.domain || ''}${q.difficulty ? ' · ' + q.difficulty : ''}${q.week != null ? ' · Week ' + q.week : ''}*`);
+    return out;
+  }
+
+  // ── Flagged Questions ──
+  lines.push(`## ⚑ Flagged Questions (${flaggedIds.length})`);
+  lines.push('');
+  if (flaggedIds.length === 0) {
+    lines.push('*No flagged questions. Use the ⚐ Flag button during any quiz to mark tricky questions.*');
+  } else {
+    flaggedIds.forEach((id, idx) => {
+      const q = questionMap[id];
+      if (!q) return;
+      lines.push(`### ${idx + 1}.`);
+      lines.push(...formatQuestion(q));
+      lines.push('---');
+      lines.push('');
+    });
+  }
+
+  lines.push('');
+  lines.push(`## ✗ Mistake Questions (${allMistakes.length} tracked)`);
+  lines.push('');
+  if (allMistakes.length === 0) {
+    lines.push('*No mistakes recorded yet.*');
+  } else {
+    allMistakes.forEach(([id, count], idx) => {
+      const q = questionMap[id];
+      if (!q) return;
+      lines.push(`### ${idx + 1}. *(wrong ${count}×)*`);
+      lines.push(...formatQuestion(q));
+      lines.push('---');
+      lines.push('');
+    });
+  }
+
+  lines.push('');
+  lines.push('---');
+  lines.push('*Exported from CCNA Mastery — free, offline, gamified CCNA 200-301 study app.*');
+
+  const md = lines.join('\n');
+  const dateSlug = new Date().toISOString().slice(0, 10);
+  const filename = `ccna-notebook-${dateSlug}.md`;
+
+  const blob = new Blob([md], { type: 'text/markdown; charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function renderNotebook() {
   const view        = getView();
   const mistakeIds  = store.getMistakeIds(2);  // wrong ≥ 2 times
@@ -3320,7 +4505,14 @@ function renderNotebook() {
     <div class="max-w-2xl mx-auto p-6 space-y-5">
       <div class="flex items-center justify-between">
         <h2 class="text-orange-400 font-bold text-xl">Mistake Notebook</h2>
-        <span class="text-xs text-gray-600">${mistakeQs.length} mistake${mistakeQs.length !== 1 ? 's' : ''} · ${flaggedIds.length} flagged</span>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-gray-600">${mistakeQs.length} mistake${mistakeQs.length !== 1 ? 's' : ''} · ${flaggedIds.length} flagged</span>
+          <button id="export-notebook-btn"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-600 hover:border-gray-500 rounded transition-colors"
+            title="Download flagged + mistake questions as a Markdown file">
+            ↓ Export Notes
+          </button>
+        </div>
       </div>
 
       <!-- Flagged Questions -->
@@ -3361,6 +4553,8 @@ function renderNotebook() {
         </button>
       </div>` : ''}
     </div>`;
+
+  document.getElementById('export-notebook-btn')?.addEventListener('click', _exportNotebook);
 
   document.getElementById('start-flag-drill')?.addEventListener('click', () => {
     startNotebookDrill(flaggedQs);
@@ -3477,6 +4671,35 @@ function getView() {
 
 // Expose for inline onclick fallback (boss end screen)
 window.switchView = switchView;
+
+// ─── Diagram Dispatcher ───────────────────────────────────────────────────────
+
+const DIAGRAM_MODULES = {
+  osi:        './js/diagrams/osi.js',
+  tcp:        './js/diagrams/tcp.js',
+  stp:        './js/diagrams/stp.js',
+  ospf:       './js/diagrams/ospf.js',
+  ethernet:   './js/diagrams/ethernet.js',
+  nat:        './js/diagrams/nat.js',
+  vlan:       './js/diagrams/vlan.js',
+  ipv6:       './js/diagrams/ipv6.js',
+  acl:        './js/diagrams/acl.js',
+  subnetting: './js/diagrams/subnetting.js',
+};
+
+async function renderDiagram(diagramId, containerEl) {
+  const path = DIAGRAM_MODULES[diagramId];
+  if (!path || !containerEl) return;
+  try {
+    const mod = await import(path);
+    mod.render(containerEl);
+  } catch (e) {
+    containerEl.innerHTML = `<p class="text-red-400 text-xs">Diagram failed to load: ${diagramId}</p>`;
+  }
+}
+
+// Expose so StoryMode (separate file) can call it
+window.renderDiagram = renderDiagram;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
