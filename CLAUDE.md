@@ -312,17 +312,15 @@ Work through pillars in order, one per session. Ask before moving to next pillar
 - [x] "The Migration" boss battle (boss_w6_the_migration, 15Q, 400XP/150 perfect bonus); boss battles total now 8
 - [x] 50 new questions: cloud service models (6), cloud networking/VPC (4), virtualisation/NFV (4), SD-WAN/SASE/ZTNA (3), Ansible (5), APIs/NETCONF/RESTCONF (6), SDN (3), IaC/Terraform (2), multi-select (3), drag-drop (3), misc cloud/automation (11); questions total now 4,232
 
-### Pillar 4 — Practical Projects Mode
-New `renderProjects()` view — 6–8 multi-phase guided projects combining CLI labs + quiz checkpoints:
-1. Build a Small Office Network (400 XP, medium)
-2. Secure a Branch Router (250 XP, easy-medium)
-3. OSPF Multi-Area Design (450 XP, medium-hard)
-4. NAT + DHCP + ACL Lab (380 XP, medium)
-5. IPv6 Dual-Stack Migration (500 XP, hard)
-6. Zero-Trust Branch Hardening (550 XP, hard — start from broken config)
-7. Cloud-Connected HQ (500 XP, hard — IPsec VPN to simulated AWS)
-8. VLAN Segmentation + Port Security Audit (350 XP, medium)
-New `type: "project"` schema field; `store.completedProjects{}` for phase progress.
+### Pillar 4 — Practical Projects Mode *(done 2026-03-27)*
+- [x] `store.completedProjects{}` added to DEFAULT_STATE; `getProjectProgress()`, `recordProjectPhase()`, `completeProject()`, `isProjectComplete()` methods added to Store
+- [x] `renderProjects()` — card grid showing all 8 projects with phase progress bars, locked/unlocked state (minLevel), difficulty/XP badges
+- [x] `_renderProjectDetail()` — briefing panel, numbered phase stepper with objectives for next phase, phase launch buttons
+- [x] `_runQuizProjectPhase()` — inline MC quiz renderer; 67% pass mark; retry on fail; auto-advances to project detail on pass
+- [x] `_runCliProjectPhase()` — inline Terminal instance per phase; Objectives panel; Hint/Validate/Reset buttons; validate() checks phase targetConfig; objective checkboxes update on pass
+- [x] 8 projects defined (PROJECTS constant): Small Office Network (400XP/med), Secure Branch Router (250XP/easy), OSPF Multi-Area (450XP/hard), NAT+DHCP+ACL (380XP/med), IPv6 Dual-Stack (500XP/hard), Zero-Trust Hardening (550XP/hard), Cloud-Connected HQ (500XP/hard), VLAN+PortSec (350XP/med)
+- [x] Each project: 3 phases (mix of cli + quiz), objectives list, hints, targetConfig; 10% XP completion bonus on finishing all phases
+- [x] Nav button "🔧 Projects" added to sidebar; 'projects' case added to switchView; breadcrumb label added
 
 ### Pillar 5 — Mega Labs
 Large-scale, multi-concept, multi-phase CLI labs that simulate real enterprise scenarios end-to-end. Unlike Projects (which are guided with hints), Mega Labs are closer to exam simulations — minimal hand-holding, full topology, multiple devices, cross-domain objectives.

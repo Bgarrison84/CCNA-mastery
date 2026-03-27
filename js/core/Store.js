@@ -48,6 +48,7 @@ const DEFAULT_STATE = {
   onboardingDone: false,   // true after first-run tour is completed/skipped
   visitedViews: [],        // views the user has opened at least once (for tip banners)
   dailyChallengeLog: {},   // { 'YYYY-MM-DD': { questionId, completed, xpAwarded } }
+  completedProjects: {},   // { [projectId]: { completedPhases: [], xpEarned, startedAt, completedAt } }
   lastSaved: null,
 };
 
@@ -375,6 +376,38 @@ export class Store {
       this._persist();
       bus.emit('boss:defeated', { bossId });
     }
+  }
+
+  // ─── Projects ───────────────────────────────────────────────────────────────
+
+  getProjectProgress(id) {
+    if (!this._state.completedProjects) this._state.completedProjects = {};
+    return this._state.completedProjects[id] || null;
+  }
+
+  recordProjectPhase(id, phaseIdx, xp = 0) {
+    if (!this._state.completedProjects) this._state.completedProjects = {};
+    const prog = this._state.completedProjects[id] || { completedPhases: [], xpEarned: 0, startedAt: Date.now(), completedAt: null };
+    if (!prog.completedPhases.includes(phaseIdx)) {
+      prog.completedPhases.push(phaseIdx);
+      prog.xpEarned = (prog.xpEarned || 0) + xp;
+      if (xp > 0) this.addXP(xp, `project_phase:${id}:${phaseIdx}`);
+    }
+    this._state.completedProjects[id] = prog;
+    this._persist();
+  }
+
+  completeProject(id) {
+    if (!this._state.completedProjects) this._state.completedProjects = {};
+    if (this._state.completedProjects[id]) {
+      this._state.completedProjects[id].completedAt = Date.now();
+      this._persist();
+    }
+  }
+
+  isProjectComplete(id, totalPhases) {
+    const prog = this.getProjectProgress(id);
+    return prog ? prog.completedPhases.length >= totalPhases : false;
   }
 
   /** Use a hint (free stock first, then costs 50 XP). */
