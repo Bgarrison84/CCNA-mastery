@@ -23,16 +23,16 @@
 Work through these one by one in upcoming sessions. Full notes in memory: improvements_backlog.md
 
 ### High Impact / Straightforward
-1. [ ] Exam Simulator Mode — timed 120Q session, proportional domain weighting, score by domain
-2. [ ] Weak Area Dashboard — accuracy % by domain/week surfaced from QuizEngine result history
-3. [ ] Wrong Answer Re-queue — missed questions re-enter session pool before quiz ends
-4. [ ] `show access-lists` + ACL rendering in `show running-config` — Terminal.js gap, breaks ACL labs
+1. [x] Exam Simulator Mode — done Phase 7 Pillar 1 (120Q, 120min, domain weighting, per-domain breakdown, exam history)
+2. [x] Weak Area Dashboard — done Phase 7 Pillar 9 (accuracy by week/domain, Drill buttons, weak card on home)
+3. [x] Wrong Answer Re-queue — done Phase 7 Pillar 7 (insertAt +5, toggle checkbox, re-queue badge)
+4. [x] `show access-lists` + ACL rendering in `show running-config` — done (Terminal.js `_renderAccessLists()` + running-config ACL block)
 
 ### Content Gaps
 5. [x] Story/Tutorial coverage — 16 new beats added 2026-03-23 covering TCP/UDP, ports, MAC tables, IPv6, topologies, inter-VLAN (ROAS), STP deep-dive, EtherChannel, wireless (CAPWAP/WLC), FHRP/HSRP, DNS, SNMP, threats taxonomy, AAA/TACACS+/RADIUS, IPsec VPN, and Ansible vs Puppet/Chef
-6. [ ] Drag-and-Drop Expansion — only 11 exist; good for OSI ordering, OSPF states, TCP handshake
-6. [ ] Multi-Part Scenario Questions — scenario paragraph + 3-4 linked questions; needs `scenario_ref` schema field
-7. [ ] Subnetting Practice Mode — expose Subnetting.js as standalone rapid-fire drill with streak counter
+6. [x] Drag-and-Drop Expansion — done Phase 5 (32 total) + Phase 9 Pillar 1 (additional sets)
+6. [x] Multi-Part Scenario Questions — done Phase 7 Pillar 10 (30 scenarios × 3 sub-Qs = 90 sub-questions, type:"scenario")
+7. [x] Subnetting Practice Mode — done Phase 9 Pillar 1 (VLSM drill tab: base /24 + 4 departments, +75 XP perfect)
 
 ### Engine / Technical
 8. [x] Named ACL Mode — `ip access-list extended NAME` → ACL_CONFIG mode with permit/deny subcommands; named ACLs render as blocks in running-config (added 2026-03-23)
@@ -155,12 +155,11 @@ Work through pillars in order, one per session. Ask before moving to next.
 
 ---
 
-## Phase 8 — Landing Page & UX Polish (planned 2026-03-25)
+## Phase 8 — Landing Page & UX Polish *(ALL DONE 2026-03-27)*
 Full notes in memory: phase8_plan.md
 Goal: give the project a public face, improve first-run experience, and make the app more visually engaging and easier to navigate.
-Work through items in order, one per session. Ask before moving to next.
 
-### Item 1 — Public Landing Page (`landing.html`)
+### Item 1 ✅ — Public Landing Page (`landing.html`)
 New file at repo root served by GitHub Pages as the public entry point.
 **Content sections:**
 - Hero: app name, tagline ("Master the CCNA 200-301 — free, offline, gamified"), "Launch App →" CTA button linking to `index.html`
