@@ -1,6 +1,8 @@
 /**
  * Store.js — Unified GameState Controller
- * Single source of truth for all player data. Persists to localStorage.
+ * Single source of truth for all player data.
+ * Persists to IndexedDB (primary) with localStorage write-through (fast cold-start).
+ * Falls back to localStorage-only if IndexedDB is unavailable.
  * Emits events on every mutation so subscribers (HUD, etc.) stay in sync.
  *
  * XP Thresholds: level[i] = XP required to REACH level i+1
@@ -52,18 +54,96 @@ const DEFAULT_STATE = {
   megaLabProgress: {},     // { [labId]: { completedPhases: [], xpEarned, hintsUsed, startedAt, completedAt } }
   badges: [],              // [{ id, name, icon, description, awardedAt }]
   scriptingProgress: {},   // { [labId]: { completedAt } }
+  confidenceLog: {},       // { questionId: [{ rating, correct, date }] }
+  pomodoroCount: 0,        // total completed work pomodoros (25-min blocks)
+  pomodoroLog: {},         // { 'YYYY-MM-DD': count } — per-day pomodoros completed
+  customQuestions: [],     // user-created MC questions [{ id, question, options, correct_answer, explanation, domain, difficulty, week, _custom }]
+  sessionHistory: [],      // last 30 session quality records [{ date, score, accuracy, srsScore, newScore, timeScore, elapsedMins, total, correct }]
   lastSaved: null,
 };
 
 const STORAGE_KEY = 'ccna_gamestate_v1';
+const IDB_NAME    = 'ccna_mastery';
+const IDB_VERSION = 1;
+const IDB_STORE   = 'gamestate';
 
 export class Store {
   constructor() {
-    this._state = this._load();
-    this._recalcLevel(false); // silent recalc on boot
+    this._state = this._load();   // sync: read localStorage immediately
+    this._recalcLevel(false);
+    this._idb          = null;    // set after async init
+    this._readyPromise = this._initIDB();
   }
 
+  /** Resolves once IndexedDB is initialised (or failed gracefully). Await in init(). */
+  get ready() { return this._readyPromise; }
+
   // ─── Internal ───────────────────────────────────────────────────────────────
+
+  /** Open the IndexedDB database, creating the object store on first run. */
+  _openIDB() {
+    return new Promise((resolve, reject) => {
+      if (!globalThis.indexedDB) { reject(new Error('IDB not supported')); return; }
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = ev => {
+        const db = ev.target.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = ev => resolve(ev.target.result);
+      req.onerror   = ev => reject(ev.target.error);
+    });
+  }
+
+  /** Read the saved state from IndexedDB. Returns null if not found. */
+  _loadFromIDB() {
+    if (!this._idb) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      try {
+        const tx  = this._idb.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).get('save');
+        req.onsuccess = ev => resolve(ev.target.result || null);
+        req.onerror   = ev => reject(ev.target.error);
+      } catch (e) { reject(e); }
+    });
+  }
+
+  /** Best-effort async write to IndexedDB. Never throws. */
+  _saveToIDB(state) {
+    if (!this._idb) return;
+    try {
+      const tx = this._idb.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(state, 'save');
+    } catch (e) {
+      console.warn('[Store] IDB write failed:', e.message);
+    }
+  }
+
+  /**
+   * Open IndexedDB and, if it holds a newer save than localStorage, upgrade
+   * the in-memory state. Runs asynchronously after construction; the app
+   * should await store.ready before rendering to pick up the IDB state.
+   */
+  async _initIDB() {
+    try {
+      this._idb = await this._openIDB();
+      const idbState = await this._loadFromIDB();
+      if (idbState && (idbState.lastSaved || 0) > (this._state.lastSaved || 0)) {
+        // IDB has a more recent save (e.g. localStorage was cleared)
+        this._state = { ...DEFAULT_STATE, ...idbState };
+        this._recalcLevel(false);
+        // Write it back to localStorage so next cold-start is also fast
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this._state)); } catch {}
+      } else if (this._state.lastSaved && !idbState) {
+        // IDB is empty but localStorage has data — prime IDB from localStorage
+        this._saveToIDB(this._state);
+      }
+    } catch (e) {
+      console.warn('[Store] IndexedDB unavailable, using localStorage only:', e.message);
+      this._idb = null;
+    }
+  }
 
   _load() {
     try {
@@ -82,6 +162,8 @@ export class Store {
     } catch (e) {
       console.warn('[Store] localStorage write failed:', e.message);
     }
+    // Best-effort async write to IndexedDB (primary long-term storage)
+    this._saveToIDB(this._state);
   }
 
   /**
@@ -197,7 +279,16 @@ export class Store {
    *   Correct → advance interval index, set dueDate = now + interval
    *   Wrong   → reset to index 0 (1 day), correctStreak = 0
    */
-  updateSRS(questionId, correct) {
+  /**
+   * Update the SRS schedule for a question after an answer.
+   * @param {string}      questionId
+   * @param {boolean}     correct
+   * @param {number|null} confidence  1–5 rating (null = not rated)
+   *   correct + conf 1–2  → treat as wrong for SRS (lucky guess)
+   *   correct + conf 3    → advance interval but don't increment correctStreak
+   *   correct + conf 4–5  → advance normally (same as no confidence)
+   */
+  updateSRS(questionId, correct, confidence = null) {
     const SRS_INTERVALS = [1, 3, 7, 14, 30, 90, 180];
     const DAY           = 86400000;
     const now           = Date.now();
@@ -208,9 +299,14 @@ export class Store {
     };
 
     e.totalSeen++;
-    if (correct) {
-      e.totalCorrect++;
-      e.correctStreak++;
+    if (correct) e.totalCorrect++;
+
+    // Confidence-adjusted SRS: low-confidence correct answers don't advance
+    const effectiveCorrect = correct && (confidence === null || confidence >= 3);
+    const halfCredit       = correct && confidence === 3;
+
+    if (effectiveCorrect) {
+      if (!halfCredit) e.correctStreak++;
       e.intervalIndex = Math.min(e.intervalIndex + 1, SRS_INTERVALS.length - 1);
     } else {
       e.correctStreak = 0;
@@ -219,6 +315,23 @@ export class Store {
     e.dueDate = now + SRS_INTERVALS[e.intervalIndex] * DAY;
 
     this._state.reviewSchedule[questionId] = e;
+    this._persist();
+  }
+
+  /**
+   * Record a confidence rating for a question answer.
+   * @param {string}  questionId
+   * @param {number}  rating    1–5
+   * @param {boolean} correct
+   */
+  recordConfidence(questionId, rating, correct) {
+    if (!this._state.confidenceLog) this._state.confidenceLog = {};
+    if (!this._state.confidenceLog[questionId]) this._state.confidenceLog[questionId] = [];
+    this._state.confidenceLog[questionId].push({ rating, correct, date: Date.now() });
+    // Keep last 10 entries per question
+    if (this._state.confidenceLog[questionId].length > 10) {
+      this._state.confidenceLog[questionId] = this._state.confidenceLog[questionId].slice(-10);
+    }
     this._persist();
   }
 
@@ -305,6 +418,41 @@ export class Store {
     this._state.studyLog[today] = (this._state.studyLog[today] || 0) + minutes;
     this._persist();
     bus.emit('study:time', { total: this._state.studyMinutes });
+  }
+
+  /** Record a completed pomodoro (25-min work block). */
+  recordPomodoro() {
+    this._state.pomodoroCount = (this._state.pomodoroCount || 0) + 1;
+    const today = new Date().toISOString().slice(0, 10);
+    if (!this._state.pomodoroLog) this._state.pomodoroLog = {};
+    this._state.pomodoroLog[today] = (this._state.pomodoroLog[today] || 0) + 1;
+    this._persist();
+    bus.emit('pomodoro:completed', { total: this._state.pomodoroCount });
+  }
+
+  get pomodoroCount() { return this._state.pomodoroCount || 0; }
+
+  // ── Custom Questions ──────────────────────────────────────────────────────
+
+  /** Add a custom question. Returns the saved question object. */
+  addCustomQuestion(q) {
+    if (!this._state.customQuestions) this._state.customQuestions = [];
+    const entry = { ...q, id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, _custom: true, type: 'multiple_choice' };
+    this._state.customQuestions.push(entry);
+    this._persist();
+    return entry;
+  }
+
+  /** Delete a custom question by id. */
+  deleteCustomQuestion(id) {
+    if (!this._state.customQuestions) return;
+    this._state.customQuestions = this._state.customQuestions.filter(q => q.id !== id);
+    this._persist();
+  }
+
+  /** Return a copy of all custom questions. */
+  getCustomQuestions() {
+    return [...(this._state.customQuestions || [])];
   }
 
   /** Cumulative study hours (float). */
@@ -576,6 +724,18 @@ export class Store {
     this._persist();
   }
 
+  /** Record a session quality entry (last 30 kept). */
+  recordSessionQuality(data) {
+    if (!this._state.sessionHistory) this._state.sessionHistory = [];
+    this._state.sessionHistory.push({ ...data, date: Date.now() });
+    if (this._state.sessionHistory.length > 30) {
+      this._state.sessionHistory = this._state.sessionHistory.slice(-30);
+    }
+    this._persist();
+  }
+
+  get sessionHistory() { return this._state.sessionHistory || []; }
+
   /** Set or clear the user's target exam date. Pass null to clear. */
   setExamDate(isoDate) {
     this._state.examDate = isoDate || null;
@@ -615,13 +775,19 @@ export class Store {
     const parsed = JSON.parse(jsonString);
     this._state = { ...DEFAULT_STATE, ...parsed };
     this._recalcLevel(false);
-    this._persist();
+    this._persist(); // writes localStorage + IDB
     bus.emit('state:changed', this.state);
   }
 
-  /** Full reset — wipes localStorage. */
+  /** Full reset — wipes localStorage and IndexedDB. */
   reset() {
     localStorage.removeItem(STORAGE_KEY);
+    if (this._idb) {
+      try {
+        const tx = this._idb.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).delete('save');
+      } catch { /* non-critical */ }
+    }
     this._state = { ...DEFAULT_STATE };
     this._recalcLevel(false);
     bus.emit('state:reset', {});

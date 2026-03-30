@@ -8,7 +8,7 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v3';
+const CACHE_VERSION = 'ccna-v4';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
@@ -26,7 +26,14 @@ const PRECACHE_URLS = [
   './js/engine/Terminal.js',
   './js/ui/HUD.js',
   './js/ui/StoryMode.js',
-  './data/content.json',
+  // Split content files (replaces monolithic content.json)
+  './data/meta.json',
+  './data/week1.json',
+  './data/week2.json',
+  './data/week3.json',
+  './data/week4.json',
+  './data/week5.json',
+  './data/week6.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',

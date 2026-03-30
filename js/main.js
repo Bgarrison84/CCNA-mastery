@@ -30,13 +30,171 @@ let story       = null;
 let examState   = null; // { session, currentIdx, results, startTime, timerId, domainStats }
 let currentView = 'story';
 let _quizKeyHandler  = null;   // keyboard shortcut handler for active quiz/exam question
+let _confKeyHandler  = null;   // keyboard handler for confidence rating panel
+let _confidenceMode  = false;  // whether confidence rating is enabled for current session
+let _smartDifficulty     = false;  // whether adaptive difficulty weighting is enabled
+let _sessionStartTime    = null;   // Date.now() when startQuiz() called — for time-on-task
+let _lastSessionQuality  = null;   // { score, accuracy, srsScore, newScore, timeScore, elapsedMins, srsReviewed, newQs }
+let _adaptiveInfo    = null;   // { weights, accuracy, alloc, boosted } from last adaptive pool build
 let _viewEnterTime   = null;   // timestamp when current view was entered (for study timer)
 let _grindPresetDomain = null; // pre-select domain when drilling from Stats
 let _grindPresetWeek   = null; // pre-select week when drilling from Stats weak-area
 let flashState = null;         // { cards, currentIdx, results, flipped, pointerStartX }
 
+// ─── Prerequisite Concept Links (Phase 10 Item 4) ─────────────────────────
+// Maps question tag strings to the reference section or story beat to review.
+// type 'reference' → switchView('reference') + open that section
+// type 'story'     → switchView('story') + story.showBeat(id)
+const PREREQ_MAP = {
+  osi:           { type: 'reference', id: 'osi',              label: 'OSI vs TCP/IP Model' },
+  tcp_udp:       { type: 'story',     id: 'w1_tcp_udp',       label: 'TCP vs UDP' },
+  ports:         { type: 'reference', id: 'ports',            label: 'Well-Known Ports' },
+  switching:     { type: 'story',     id: 'w1_switching',     label: 'Ethernet Switching' },
+  subnetting:    { type: 'reference', id: 'cidr',             label: 'Subnetting & CIDR' },
+  ipv6:          { type: 'reference', id: 'ipv6',             label: 'IPv6 Address Types' },
+  vlan:          { type: 'story',     id: 'w2_vlan_concept',  label: 'VLANs' },
+  trunking:      { type: 'story',     id: 'w2_trunk_explain', label: '802.1Q Trunking' },
+  stp:           { type: 'reference', id: 'stp',              label: 'STP States & Timers' },
+  etherchannel:  { type: 'story',     id: 'w2_etherchannel',  label: 'EtherChannel' },
+  wireless:      { type: 'story',     id: 'w2_wireless_intro',label: 'Wireless Concepts' },
+  ospf:          { type: 'reference', id: 'ospf',             label: 'OSPF LSA Types' },
+  routing:       { type: 'reference', id: 'routing',          label: 'Routing Protocol Comparison' },
+  static_routes: { type: 'story',     id: 'w3_ad_explain',    label: 'Static Routes & AD' },
+  fhrp:          { type: 'story',     id: 'w3_fhrp',          label: 'FHRP / HSRP' },
+  dhcp:          { type: 'story',     id: 'w4_dora',          label: 'DHCP DORA Process' },
+  nat:           { type: 'story',     id: 'w4_nat',           label: 'NAT / PAT' },
+  dns:           { type: 'story',     id: 'w4_dns',           label: 'DNS' },
+  ntp:           { type: 'story',     id: 'w4_ntp',           label: 'NTP' },
+  snmp:          { type: 'reference', id: 'snmp',             label: 'SNMP Versions' },
+  qos:           { type: 'story',     id: 'w4_qos',           label: 'QoS' },
+  acl:           { type: 'story',     id: 'w5_acl_intro',     label: 'ACLs' },
+  threats:       { type: 'story',     id: 'w5_threats',       label: 'Security Threats' },
+  aaa:           { type: 'reference', id: 'aaa',              label: 'AAA / TACACS+ / RADIUS' },
+  port_security: { type: 'story',     id: 'w5_port_security', label: 'Port Security' },
+  ipsec:         { type: 'story',     id: 'w5_ipsec_vpn',     label: 'IPsec VPN' },
+  sdn:           { type: 'story',     id: 'w6_sdn_intro',     label: 'SDN' },
+  ansible:       { type: 'story',     id: 'w6_ansible',       label: 'Ansible' },
+  netconf:       { type: 'story',     id: 'w6_yang',          label: 'NETCONF / YANG' },
+  cloud:         { type: 'reference', id: 'cloud',            label: 'Cloud Computing' },
+};
+
 function _removeQuizKeyHandler() {
   if (_quizKeyHandler) { document.removeEventListener('keydown', _quizKeyHandler); _quizKeyHandler = null; }
+}
+
+function _removeConfKeyHandler() {
+  if (_confKeyHandler) { document.removeEventListener('keydown', _confKeyHandler); _confKeyHandler = null; }
+}
+
+/**
+ * Build "Review this first →" HTML for wrong-answer feedback.
+ * Returns empty string if no matching tags, or if tags produce no PREREQ_MAP hits.
+ */
+function _prereqLinksHtml(tags) {
+  if (!tags?.length) return '';
+  const links = tags
+    .map(tag => PREREQ_MAP[tag])
+    .filter(Boolean)
+    .map(entry => {
+      const icon  = entry.type === 'reference' ? '📚' : '📖';
+      const where = entry.type === 'reference' ? 'Reference' : 'Story';
+      return `<button class="prereq-link inline-flex items-center gap-1 text-[11px] bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-blue-500 text-blue-400 hover:text-blue-300 px-2 py-0.5 rounded transition-colors" data-prereq-type="${entry.type}" data-prereq-id="${entry.id}">${icon} ${entry.label} <span class="text-gray-500 text-[10px]">(${where})</span> →</button>`;
+    });
+  if (!links.length) return '';
+  return `<div class="mt-2 border-t border-gray-700 pt-2">
+    <p class="text-[10px] font-mono text-gray-500 mb-1.5">REVIEW THIS FIRST:</p>
+    <div class="flex flex-wrap gap-1.5">${links.join('')}</div>
+  </div>`;
+}
+
+/**
+ * Navigate to a prereq target — called when a .prereq-link button is clicked.
+ */
+function _goToPrereq(type, id) {
+  if (type === 'reference') {
+    switchView('reference');
+    // After renderReference() runs, open and scroll to the target section
+    setTimeout(() => {
+      const sec = document.querySelector(`.ref-section[data-ref-id="${id}"]`);
+      if (!sec) return;
+      sec.querySelector('.ref-body')?.classList.remove('hidden');
+      const caret = sec.querySelector('.ref-caret');
+      if (caret) caret.textContent = '▼';
+      sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  } else {
+    switchView('story');
+    setTimeout(() => {
+      if (story) story.showBeat(id);
+    }, 150);
+  }
+}
+
+/**
+ * Routes answer selection through the confidence panel when confidence mode is on,
+ * or directly to submitQuizAnswer when it's off.
+ */
+function _handleAnswerSelection(answer) {
+  if (_confidenceMode) {
+    _removeQuizKeyHandler();
+    _selectAnswerForConfidence(answer);
+  } else {
+    submitQuizAnswer(answer);
+  }
+}
+
+/**
+ * Shows the confidence rating panel after an answer is selected.
+ * Disables all answer inputs, highlights the chosen option, then waits
+ * for a 1–5 rating before calling submitQuizAnswer(answer, confidence).
+ */
+function _selectAnswerForConfidence(answer) {
+  // Disable all answer inputs to prevent re-selection
+  document.querySelectorAll('.quiz-option').forEach(b => { b.disabled = true; b.style.pointerEvents = 'none'; });
+  document.getElementById('submit-multi')?.setAttribute('disabled', 'true');
+  document.getElementById('submit-drag')?.setAttribute('disabled', 'true');
+  document.getElementById('submit-fill')?.setAttribute('disabled', 'true');
+
+  // Highlight the selected MC / T-F option (before correctness is revealed)
+  const selectedBtn = typeof answer === 'string' ? document.querySelector(`.quiz-option[data-answer="${answer}"]`) : null;
+  if (selectedBtn) selectedBtn.classList.add('border-purple-500', 'bg-purple-900/20');
+
+  const feedback = document.getElementById('quiz-feedback');
+  if (!feedback) { submitQuizAnswer(answer); return; }
+  feedback.classList.remove('hidden');
+  feedback.className = 'mt-4 p-3 rounded text-sm bg-gray-900 border border-purple-900/50';
+
+  const LABELS  = ['Guess','Unsure','Maybe','Sure','Certain'];
+  const BORDERS = ['border-red-900','border-orange-900','border-yellow-900','border-lime-900','border-green-900'];
+  const TEXTS   = ['text-red-400','text-orange-400','text-yellow-400','text-lime-400','text-green-400'];
+  const HOVERS  = ['hover:bg-red-900/30','hover:bg-orange-900/30','hover:bg-yellow-900/30','hover:bg-lime-900/30','hover:bg-green-900/30'];
+
+  feedback.innerHTML = `
+    <p class="text-gray-400 text-xs mb-2 font-mono">&#127919; How confident were you?</p>
+    <div class="flex gap-1.5 mb-1">
+      ${[1,2,3,4,5].map(n => `
+        <button data-conf="${n}" class="conf-btn flex-1 py-2 rounded border text-xs font-mono ${BORDERS[n-1]} ${TEXTS[n-1]} ${HOVERS[n-1]} transition-colors">
+          ${n}<br><span class="text-[10px] opacity-60">${LABELS[n-1]}</span>
+        </button>`).join('')}
+    </div>
+    <p class="text-[10px] text-gray-600">Press 1–5 or click to rate</p>`;
+
+  feedback.querySelectorAll('.conf-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _removeConfKeyHandler();
+      submitQuizAnswer(answer, +btn.dataset.conf);
+    });
+  });
+
+  _removeConfKeyHandler();
+  _confKeyHandler = (e) => {
+    if (['1','2','3','4','5'].includes(e.key)) {
+      e.preventDefault();
+      _removeConfKeyHandler();
+      submitQuizAnswer(answer, +e.key);
+    }
+  };
+  document.addEventListener('keydown', _confKeyHandler);
 }
 
 /**
@@ -149,6 +307,69 @@ function spawnFloatingXP(amount, anchorEl) {
 
 // ─── Loading / Error overlays ─────────────────────────────────────────────────
 
+// ─── Progressive Content Loading ──────────────────────────────────────────────
+
+const WEEK_NUMS = [1, 2, 3, 4, 5, 6];
+
+// Tracks which week files have been fetched: 'pending' | 'loading' | 'loaded' | 'error'
+const _weekState = {};
+WEEK_NUMS.forEach(w => { _weekState[w] = 'pending'; });
+
+/** Flatten scenario questions from a raw questions array. */
+function _flattenQuestions(rawQuestions) {
+  const out = [];
+  for (const q of rawQuestions) {
+    if (q.type !== 'scenario') { out.push(q); continue; }
+    (q.sub_questions || []).forEach((sub, i) => {
+      out.push({
+        ...sub,
+        id:            sub.id  || `${q.id}_q${i + 1}`,
+        domain:        sub.domain    || q.domain,
+        week:          sub.week      ?? q.week,
+        difficulty:    sub.difficulty || q.difficulty,
+        scenario_text: q.scenario_text,
+        scenario_ref:  q.scenario_ref,
+        scenario_id:   q.id,
+        source_ref:    sub.source_ref || q.scenario_ref,
+      });
+    });
+  }
+  return out;
+}
+
+/** Fetch and merge a single week's questions into content.questions. No-op if already loaded. */
+async function _loadWeek(weekNum) {
+  if (_weekState[weekNum] === 'loaded' || _weekState[weekNum] === 'loading') return;
+  _weekState[weekNum] = 'loading';
+  try {
+    const r = await fetch(`./data/week${weekNum}.json`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const flattened = _flattenQuestions(data.questions || []);
+    // Remove any placeholder entries for this week, then append
+    content.questions = content.questions.filter(q => String(q.week) !== String(weekNum));
+    content.questions.push(...flattened);
+    _weekState[weekNum] = 'loaded';
+  } catch (e) {
+    console.warn(`[content] Failed to load week${weekNum}.json:`, e);
+    _weekState[weekNum] = 'error';
+  }
+}
+
+/** Returns a Promise that resolves once all 6 week files are loaded. */
+let _allWeeksPromise = null;
+function _ensureAllWeeksLoaded() {
+  if (!_allWeeksPromise) {
+    _allWeeksPromise = Promise.all(WEEK_NUMS.map(w => _loadWeek(w)));
+  }
+  return _allWeeksPromise;
+}
+
+/** Returns true if all week files are in 'loaded' state. */
+function _allWeeksLoaded() {
+  return WEEK_NUMS.every(w => _weekState[w] === 'loaded');
+}
+
 /** Minimal loading overlay for return visits while content.json fetches. */
 function showLoadingOverlay() {
   const el = document.createElement('div');
@@ -224,7 +445,7 @@ function showContentError() {
       <div style="color:#ff4444;font-size:1rem;font-weight:800;letter-spacing:0.06em;margin-bottom:10px;
         text-shadow:0 0 10px rgba(255,68,68,0.6);">OFFLINE — CONTENT FAILED TO LOAD</div>
       <p style="color:#6a6a6a;font-size:0.78rem;line-height:1.7;margin-bottom:8px;">
-        Could not fetch <code style="color:#8fbc8f;">data/content.json</code>.
+        Could not fetch content data files (<code style="color:#8fbc8f;">meta.json</code> / <code style="color:#8fbc8f;">week*.json</code>).
       </p>
       <p style="color:#5a5a5a;font-size:0.72rem;line-height:1.6;margin-bottom:28px;">
         If you are offline, try installing the app as a PWA — the service worker will cache all assets so the app works without a connection.
@@ -379,12 +600,13 @@ function showBoot(contentPromise) {
         if (s) s.textContent = ' ' + spinFrames[spinIdx++ % spinFrames.length];
       }, 160);
 
-      // Wait for content fetch
-      const rawContent = await contentPromise;
+      // Wait for content fetch (initialPromise resolves to [meta, weekData])
+      const result = await contentPromise;
       clearInterval(spinInterval);
 
-      const qCount = rawContent?.questions?.length ?? 0;
-      const labCount = rawContent?.labs?.length ?? 0;
+      const [metaResult, weekResult] = Array.isArray(result) ? result : [result, null];
+      const qCount   = weekResult?.questions?.length ?? metaResult?.questions?.length ?? 0;
+      const labCount = metaResult?.labs?.length ?? 0;
       const spinner = document.getElementById('boot-spinner');
       if (spinner) {
         spinner.style.color = '#00ff41';
@@ -612,72 +834,67 @@ function showOnboarding() {
 }
 
 async function init() {
-  // Kick off content fetch immediately (runs in parallel with boot/onboarding)
-  const contentPromise = fetch('./data/content.json')
-    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .catch(e => { console.error('[main] Failed to load content.json:', e); return null; });
+  // Wait for IndexedDB to initialise (may upgrade state from IDB if localStorage was cleared)
+  await store.ready;
 
-  // First visit: animated boot sequence (runs during fetch)
-  // Return visit: show minimal loading overlay instead of blank flash
+  // Determine which week to load first (user's current week, default 1)
+  const firstWeek = Math.min(Math.max(store.state.currentWeek || 1, 1), 6);
+
+  // Kick off meta + first week fetch in parallel immediately
+  const fetchJson = url => fetch(url)
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .catch(e => { console.error(`[main] Failed: ${url}`, e); return null; });
+
+  const metaPromise    = fetchJson('./data/meta.json');
+  const firstWkPromise = fetchJson(`./data/week${firstWeek}.json`);
+  const initialPromise = Promise.all([metaPromise, firstWkPromise]);
+
+  // First visit: animated boot sequence; return visit: minimal overlay
   if (!store.state.onboardingDone) {
-    await showBoot(contentPromise);
+    await showBoot(initialPromise);
   } else {
     showLoadingOverlay();
   }
 
-  // Await content (may already be resolved if boot took longer than fetch)
-  let rawContent = await contentPromise;
+  let [meta, firstWkData] = await initialPromise;
 
-  // On failure: show error + await retry, then re-fetch
-  while (!rawContent) {
+  // Retry on failure
+  while (!meta || !firstWkData) {
     hideLoadingOverlay();
     await showContentError();
     showLoadingOverlay();
-    rawContent = await fetch('./data/content.json')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .catch(e => { console.error('[main] Retry failed:', e); return null; });
+    if (!meta)        meta        = await fetchJson('./data/meta.json');
+    if (!firstWkData) firstWkData = await fetchJson(`./data/week${firstWeek}.json`);
   }
 
   hideLoadingOverlay();
 
-  try {
-    // Flatten scenario questions into individual sub-questions
-    const flattened = [];
-    for (const q of rawContent.questions) {
-      if (q.type !== 'scenario') { flattened.push(q); continue; }
-      (q.sub_questions || []).forEach((sub, i) => {
-        flattened.push({
-          ...sub,
-          id:            sub.id  || `${q.id}_q${i + 1}`,
-          domain:        sub.domain    || q.domain,
-          week:          sub.week      ?? q.week,
-          difficulty:    sub.difficulty || q.difficulty,
-          scenario_text: q.scenario_text,
-          scenario_ref:  q.scenario_ref,
-          scenario_id:   q.id,
-          source_ref:    sub.source_ref || q.scenario_ref,
-        });
-      });
-    }
-    rawContent.questions = flattened;
-    content = rawContent;
-  } catch (e) {
-    console.error('[main] Failed to process content:', e);
-    content = { questions: [], labs: [], bossBattles: [], storyBeats: [] };
-  }
+  // Build initial content object: meta fields + first-week questions
+  content = {
+    labs:        meta.labs        || [],
+    bossBattles: meta.bossBattles || [],
+    storyBeats:  meta.storyBeats  || [],
+    questions:   _flattenQuestions(firstWkData.questions || []),
+  };
+  _weekState[firstWeek] = 'loaded';
 
   // Daily streak check
   store.checkStreak();
-  _viewEnterTime = Date.now(); // start study timer from app launch
+  _viewEnterTime = Date.now();
 
-  // First-run onboarding tour (only if never completed)
+  // First-run onboarding
   if (!store.state.onboardingDone) {
     await showOnboarding();
   }
 
   initHUD();
   initNav();
-  switchView('story'); // default view
+  switchView('story');
+
+  // Background-load all remaining weeks after initial render
+  setTimeout(() => {
+    WEEK_NUMS.filter(w => w !== firstWeek).forEach(w => _loadWeek(w));
+  }, 200);
 }
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
@@ -694,6 +911,143 @@ function initHUD() {
     weekBadge:       document.getElementById('hud-week'),
   });
   initThemePicker();
+  initPomodoro();
+}
+
+// ─── Pomodoro Timer (Phase 10 Item 5) ────────────────────────────────────────
+
+const POMODORO_WORK_SECS  = 25 * 60;   // 25 minutes
+const POMODORO_BREAK_SECS = 5  * 60;   // 5-minute break
+
+let _pomo = {
+  state:     'idle',   // 'idle' | 'work' | 'break'
+  remaining: 0,        // seconds left
+  _interval: null,
+};
+
+function initPomodoro() {
+  // Sync total count badge
+  _syncPomodoroCount();
+
+  const btn = document.getElementById('hud-pomodoro-btn');
+  if (!btn) return;
+  btn.addEventListener('click', _togglePomodoro);
+}
+
+function _syncPomodoroCount() {
+  const el = document.getElementById('hud-pomodoro-total');
+  if (el) el.textContent = store.pomodoroCount;
+}
+
+function _togglePomodoro() {
+  if (_pomo.state === 'idle') {
+    _startPomodoroWork();
+  } else {
+    _stopPomodoro(true); // user-cancelled
+  }
+}
+
+function _startPomodoroWork() {
+  _pomo.state     = 'work';
+  _pomo.remaining = POMODORO_WORK_SECS;
+  _pomo._interval = setInterval(_pomodoroTick, 1000);
+  _renderPomodoroHUD();
+}
+
+function _startPomodoroBreak() {
+  _pomo.state     = 'break';
+  _pomo.remaining = POMODORO_BREAK_SECS;
+  _pomo._interval = setInterval(_pomodoroTick, 1000);
+  _renderPomodoroHUD();
+}
+
+function _stopPomodoro(cancelled = false) {
+  clearInterval(_pomo._interval);
+  _pomo._interval = null;
+  _pomo.state     = 'idle';
+  _pomo.remaining = 0;
+  _renderPomodoroHUD();
+  if (!cancelled) return;
+  // Cancelled mid-session — toast
+  const btn = document.getElementById('hud-pomodoro-btn');
+  if (btn) btn.title = 'Start a 25-minute Pomodoro focus session';
+}
+
+function _pomodoroTick() {
+  _pomo.remaining--;
+  _renderPomodoroHUD();
+
+  if (_pomo.remaining > 0) return;
+
+  // Timer expired
+  clearInterval(_pomo._interval);
+  _pomo._interval = null;
+
+  if (_pomo.state === 'work') {
+    // Work block done — record, notify, start break
+    store.recordPomodoro();
+    store.addStudyTime(25);  // credit 25 min to study timer
+    _syncPomodoroCount();
+    _pomodoroToast(
+      `&#127813; Pomodoro #${store.pomodoroCount} complete! +25 min study time. Take a 5-minute break.`,
+      'green'
+    );
+    _startPomodoroBreak();
+  } else {
+    // Break done — return to idle, prompt to start another
+    _pomo.state = 'idle';
+    _renderPomodoroHUD();
+    _pomodoroToast('&#9749; Break over! Click &#127813; to start your next Pomodoro.', 'blue');
+  }
+}
+
+function _renderPomodoroHUD() {
+  const btn   = document.getElementById('hud-pomodoro-btn');
+  const label = document.getElementById('hud-pomodoro-label');
+  if (!btn || !label) return;
+
+  if (_pomo.state === 'idle') {
+    label.textContent = 'Pomodoro';
+    btn.className = 'flex items-center gap-1 text-red-400 hover:text-red-300 transition-colors cursor-pointer select-none';
+    btn.title = 'Start a 25-minute Pomodoro focus session';
+    return;
+  }
+
+  const mins = String(Math.floor(_pomo.remaining / 60)).padStart(2, '0');
+  const secs = String(_pomo.remaining % 60).padStart(2, '0');
+  const display = `${mins}:${secs}`;
+
+  if (_pomo.state === 'work') {
+    label.textContent = `${display} — click to cancel`;
+    btn.className = 'flex items-center gap-1 text-red-400 font-mono font-bold cursor-pointer select-none animate-pulse';
+    btn.title = `Focus session: ${display} remaining. Click to cancel.`;
+  } else {
+    label.textContent = `\u2615 ${display} break`;
+    btn.className = 'flex items-center gap-1 text-blue-400 font-mono cursor-pointer select-none';
+    btn.title = `Break: ${display} remaining. Click to skip.`;
+  }
+}
+
+function showToast(msg, duration = 3000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const div = document.createElement('div');
+  div.className = 'bg-gray-800 border border-gray-600 text-gray-200 rounded px-3 py-2 text-xs max-w-xs shadow-lg';
+  div.textContent = msg;
+  container.appendChild(div);
+  setTimeout(() => div.remove(), duration);
+}
+
+function _pomodoroToast(msg, colour = 'green') {
+  const colourMap = { green: 'bg-green-900 border-green-600 text-green-200', blue: 'bg-blue-900 border-blue-600 text-blue-200' };
+  const cls = colourMap[colour] || colourMap.green;
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const div = document.createElement('div');
+  div.className = `${cls} border rounded px-3 py-2 text-xs max-w-xs shadow-lg`;
+  div.innerHTML = msg;
+  container.appendChild(div);
+  setTimeout(() => div.remove(), 6000);
 }
 
 // ─── Theming ──────────────────────────────────────────────────────────────────
@@ -1036,9 +1390,10 @@ function initNav() {
     const week = store.state.currentWeek;
     store.updateStoryProgress(`quiz_w${week}_complete`, { seen: true, score: summary.score });
 
-    // Build per-domain and per-week breakdown from results
-    const domainStats = {};
-    const weekStats   = {};
+    // Build per-domain, per-week, and per-difficulty breakdown from results
+    const domainStats     = {};
+    const weekStats       = {};
+    const difficultyStats = {};
     summary.results.forEach(r => {
       const q = content.questions.find(q => q.id === r.questionId);
       if (!q) return;
@@ -1049,6 +1404,10 @@ function initNav() {
       if (!weekStats[w]) weekStats[w] = { correct: 0, total: 0 };
       weekStats[w].total++;
       if (r.correct) weekStats[w].correct++;
+      const d = q.difficulty || 'medium';
+      if (!difficultyStats[d]) difficultyStats[d] = { correct: 0, total: 0 };
+      difficultyStats[d].total++;
+      if (r.correct) difficultyStats[d].correct++;
     });
     store.recordQuizSession({
       total: summary.total,
@@ -1057,7 +1416,44 @@ function initNav() {
       mode: 'grind',
       domainStats,
       weekStats,
+      difficultyStats,
       streakMultiplier: store.streakMultiplier,
+    });
+
+    // ── Session Quality Score ────────────────────────────────────────────────
+    // After the session, check SRS records: totalSeen===1 → was new; >1 → was reviewed
+    const elapsedMins = _sessionStartTime ? (Date.now() - _sessionStartTime) / 60000 : 0;
+    _sessionStartTime = null;
+    let srsReviewed = 0, newQs = 0;
+    summary.results.forEach(r => {
+      const srs = store.state.reviewSchedule?.[r.questionId];
+      if (srs && srs.totalSeen > 1) srsReviewed++;
+      else newQs++;
+    });
+    const accuracyPts = summary.score * 0.40;
+    const srsPts      = Math.min(srsReviewed / 8,  1.0) * 20;
+    const newPts      = Math.min(newQs      / 5,  1.0) * 20;
+    const timePts     = Math.min(elapsedMins / 20, 1.0) * 20;
+    const qualScore   = Math.round(Math.min(accuracyPts + srsPts + newPts + timePts, 100));
+    _lastSessionQuality = {
+      score: qualScore,
+      accuracy: Math.round(accuracyPts),
+      srsScore: Math.round(srsPts),
+      newScore: Math.round(newPts),
+      timeScore: Math.round(timePts),
+      elapsedMins: Math.round(elapsedMins),
+      srsReviewed,
+      newQs,
+    };
+    store.recordSessionQuality({
+      score: qualScore,
+      accuracy: Math.round(accuracyPts),
+      srsScore: Math.round(srsPts),
+      newScore: Math.round(newPts),
+      timeScore: Math.round(timePts),
+      elapsedMins: Math.round(elapsedMins),
+      total: summary.total,
+      correct: summary.correct,
     });
 
     if (currentView === 'story' && story) story.showCurrentBeat();
@@ -1740,6 +2136,14 @@ function renderGrind() {
             <input type="checkbox" id="quiz-requeue" class="accent-yellow-500">
             <span class="text-gray-300">Re-queue</span>
           </label>
+          <label class="flex items-center gap-1 cursor-pointer select-none border border-gray-600 rounded px-2 py-1" title="Confidence: after selecting an answer, rate how sure you were (1–5). Affects SRS — low-confidence correct answers are re-scheduled as wrong.">
+            <input type="checkbox" id="quiz-confidence" class="accent-purple-500">
+            <span class="text-gray-300">Confidence</span>
+          </label>
+          <label class="flex items-center gap-1 cursor-pointer select-none border border-gray-600 rounded px-2 py-1" title="Smart difficulty: weights question selection toward tiers you're struggling with (requires 20+ answers per tier to activate).">
+            <input type="checkbox" id="quiz-smart" class="accent-blue-500">
+            <span class="text-gray-300">Smart</span>
+          </label>
           <button id="start-quiz" class="px-4 py-1 bg-green-700 hover:bg-green-600 text-white rounded font-semibold">Start</button>
         </div>
       </div>
@@ -1770,17 +2174,148 @@ function renderGrind() {
   if (presetDomain || presetWeek) setTimeout(startQuiz, 0);
 }
 
+/**
+ * Build a difficulty-weighted question pool for Smart Difficulty mode.
+ * Analyses quizHistory to find which difficulty tiers have low accuracy,
+ * then over-samples from those tiers proportionally.
+ *
+ * Weight tiers:
+ *   accuracy < 60% → 3× (struggling)
+ *   60–74%         → 2× (needs work)
+ *   ≥75%           → 1× (proficient)
+ *   < 20 answers   → 1× (not enough data)
+ *
+ * @param {object[]} basePool  Questions pre-filtered by week (all types, all domains)
+ * @param {string}   domain    Domain filter ('all' or specific domain)
+ * @returns {{ pool: object[], info: object|null }}
+ */
+function _computeAdaptivePool(basePool, domain) {
+  const questions = (domain === 'all' ? basePool : basePool.filter(q => q.domain === domain))
+    .filter(q => q.type !== 'cli_lab');
+
+  // Aggregate per-difficulty totals across all recorded sessions
+  const history = store.state.quizHistory || [];
+  const diffAcc = { easy: { c: 0, t: 0 }, medium: { c: 0, t: 0 }, hard: { c: 0, t: 0 } };
+  history.forEach(s => {
+    Object.entries(s.difficultyStats || {}).forEach(([diff, stat]) => {
+      if (diffAcc[diff]) { diffAcc[diff].c += stat.correct; diffAcc[diff].t += stat.total; }
+    });
+  });
+
+  // Compute weights and accuracy values
+  const MIN_ANSWERS = 20;
+  const weights  = {};
+  const accuracy = {};
+  ['easy', 'medium', 'hard'].forEach(tier => {
+    const { c, t } = diffAcc[tier];
+    if (t < MIN_ANSWERS) {
+      weights[tier]  = 1.0;
+      accuracy[tier] = null;
+    } else {
+      const acc = c / t;
+      accuracy[tier] = acc;
+      weights[tier]  = acc < 0.60 ? 3.0 : acc < 0.75 ? 2.0 : 1.0;
+    }
+  });
+
+  // Split pool into difficulty buckets; zero weight for empty buckets
+  const buckets = {
+    easy:   questions.filter(q => q.difficulty === 'easy'),
+    medium: questions.filter(q => q.difficulty === 'medium'),
+    hard:   questions.filter(q => q.difficulty === 'hard'),
+  };
+  ['easy', 'medium', 'hard'].forEach(t => { if (!buckets[t].length) weights[t] = 0; });
+
+  const totalW = weights.easy + weights.medium + weights.hard;
+  if (totalW === 0) return { pool: questions, info: null };
+
+  // Allocate session of 20 questions proportionally to weights
+  const SESSION = 20;
+  const alloc = { easy: 0, medium: 0, hard: 0 };
+  let allocated = 0;
+  const tiers = ['easy', 'medium', 'hard'];
+  tiers.forEach((tier, i) => {
+    if (!buckets[tier].length || weights[tier] === 0) return;
+    if (i < tiers.length - 1) {
+      alloc[tier]  = Math.max(1, Math.round(SESSION * weights[tier] / totalW));
+      alloc[tier]  = Math.min(alloc[tier], buckets[tier].length);
+      allocated   += alloc[tier];
+    } else {
+      alloc[tier] = Math.min(buckets[tier].length, Math.max(1, SESSION - allocated));
+    }
+  });
+
+  const _shuffle = arr => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const combined = [
+    ..._shuffle(buckets.easy).slice(0, alloc.easy),
+    ..._shuffle(buckets.medium).slice(0, alloc.medium),
+    ..._shuffle(buckets.hard).slice(0, alloc.hard),
+  ];
+
+  // Identify the tier with highest boost (highest weight > 1.0)
+  const boosted = tiers
+    .filter(t => weights[t] > 1.0)
+    .sort((a, b) => weights[b] - weights[a])[0] || null;
+
+  return { pool: _shuffle(combined), info: { weights, accuracy, alloc, boosted } };
+}
+
 function startQuiz() {
   const domain     = document.getElementById('quiz-domain')?.value || 'all';
   const week       = document.getElementById('quiz-week')?.value   || 'all';
   const difficulty = document.getElementById('quiz-difficulty')?.value || 'all';
   const srsOn      = document.getElementById('quiz-srs')?.checked ?? true;
   const requeueOn  = document.getElementById('quiz-requeue')?.checked ?? false;
+  _confidenceMode  = document.getElementById('quiz-confidence')?.checked ?? false;
+  _smartDifficulty = document.getElementById('quiz-smart')?.checked ?? false;
+
+  // If "all weeks" selected and not yet fully loaded, wait and retry
+  if (week === 'all' && !_allWeeksLoaded()) {
+    const prompt = document.getElementById('quiz-prompt');
+    if (prompt) {
+      prompt.classList.remove('hidden');
+      prompt.innerHTML = `
+        <div class="inline-flex flex-col items-center gap-3 py-10">
+          <div class="text-xl animate-pulse">⏳</div>
+          <p class="text-yellow-400 font-semibold text-sm">Loading remaining weeks…</p>
+          <p class="text-gray-500 text-xs">This takes a few seconds on first load.</p>
+        </div>`;
+    }
+    _ensureAllWeeksLoaded().then(() => {
+      if (prompt) prompt.classList.add('hidden');
+      startQuiz();
+    });
+    return;
+  }
 
   // Pre-filter by week if selected (QuizEngine handles domain/difficulty internally)
-  const pool = week === 'all' ? content.questions : content.questions.filter(q => String(q.week) === String(week));
+  // Merge custom questions into the pool (✏️ badge shown during quiz when q._custom)
+  const customQs = store.getCustomQuestions();
+  const basePool = week === 'all' ? [...content.questions, ...customQs] : [...content.questions.filter(q => String(q.week) === String(week)), ...customQs.filter(q => week === 'all' || String(q.week) === String(week))];
+  const pool = basePool;
 
-  quiz = new QuizEngine(pool, store, { domain, difficulty, count: 20, shuffle: !srsOn, srs: srsOn, requeueWrong: requeueOn });
+  // Smart difficulty: pre-weight pool toward historically weak tiers (Item 2)
+  // + adaptive in-session selection toward 60–70% challenge zone (Item 13)
+  // Both only activate when difficulty is 'all' and SRS is off.
+  const useAdaptive = _smartDifficulty && difficulty === 'all' && !srsOn;
+  if (_smartDifficulty && difficulty === 'all') {
+    const { pool: adaptedPool, info } = _computeAdaptivePool(pool, domain);
+    _adaptiveInfo = info;
+    quiz = new QuizEngine(adaptedPool, store, { domain: 'all', difficulty: 'all', count: 20, shuffle: !srsOn, srs: srsOn, requeueWrong: requeueOn, adaptive: useAdaptive });
+  } else {
+    _adaptiveInfo = null;
+    quiz = new QuizEngine(pool, store, { domain, difficulty, count: 20, shuffle: !srsOn, srs: srsOn, requeueWrong: requeueOn, adaptive: false });
+  }
+
+  _sessionStartTime = Date.now();
 
   if (!quiz.start()) {
     // No questions matched the current filters — show inline empty state
@@ -1826,6 +2361,37 @@ function renderQuizQuestion() {
   const requeueBadge = quiz.opts.requeueWrong
     ? '<span class="px-1.5 py-0.5 rounded text-[10px] bg-yellow-950 text-yellow-600 border border-yellow-900" title="Re-queue active — missed questions will reappear">↩ Re-queue</span>'
     : '';
+  const customBadge = q._custom
+    ? '<span class="px-1.5 py-0.5 rounded text-[10px] bg-purple-950 text-purple-300 border border-purple-800" title="Your custom question">&#9998; Custom</span>'
+    : '';
+  const smartBadge = (_smartDifficulty && _adaptiveInfo)
+    ? (() => {
+        // If adaptive in-session mode is active, show live per-tier accuracy
+        const adaptStats = quiz?.adaptiveStats;
+        if (adaptStats) {
+          const parts = ['E','M','H'].map((ltr, i) => {
+            const tier = ['easy','medium','hard'][i];
+            const s = adaptStats[tier];
+            if (!s) return `<span class="text-gray-600">${ltr}:?</span>`;
+            const color = s.acc >= 60 && s.acc <= 70 ? 'text-green-400'
+                        : s.acc < 60 ? 'text-red-400' : 'text-yellow-400';
+            return `<span class="${color}">${ltr}:${s.acc}%</span>`;
+          }).join(' ');
+          const tip = 'Smart adaptive — live difficulty balance toward 60–70% challenge zone';
+          return `<span class="px-1.5 py-0.5 rounded text-[10px] bg-blue-950 text-blue-400 border border-blue-900 font-mono" title="${tip}">&#9650; ${parts}</span>`;
+        }
+        // Fall back to historical-pool badge (SRS on, or first question)
+        const { boosted, accuracy, alloc } = _adaptiveInfo;
+        if (boosted) {
+          const acc = accuracy[boosted];
+          const pct = acc !== null ? ` ${Math.round(acc * 100)}%` : '';
+          const label = boosted.charAt(0).toUpperCase() + boosted.slice(1);
+          const tip = `Smart difficulty — boosting ${label}${pct} accuracy. Pool: ${alloc.easy}E/${alloc.medium}M/${alloc.hard}H`;
+          return `<span class="px-1.5 py-0.5 rounded text-[10px] bg-blue-950 text-blue-400 border border-blue-900" title="${tip}">&#9650; ${label}</span>`;
+        }
+        return `<span class="px-1.5 py-0.5 rounded text-[10px] bg-gray-800 text-gray-500 border border-gray-700" title="Smart difficulty — all tiers balanced">Smart: &#9646;</span>`;
+      })()
+    : '';
 
   // For drag_drop: pre-shuffle items (track original indices for answer submission)
   let _ddItems = [];
@@ -1846,6 +2412,8 @@ function renderQuizQuestion() {
         <div class="flex items-center gap-2">
           ${srsBadge}
           ${requeueBadge}
+          ${smartBadge}
+          ${customBadge}
           <span class="uppercase font-semibold text-${q.difficulty === 'hard' ? 'red' : q.difficulty === 'medium' ? 'yellow' : 'green'}-400">${q.difficulty}</span>
         </div>
         <div class="flex items-center gap-2">
@@ -1914,12 +2482,12 @@ function renderQuizQuestion() {
     </div>`;
 
   document.querySelectorAll('.quiz-option').forEach(btn => {
-    btn.addEventListener('click', () => submitQuizAnswer(btn.dataset.answer));
+    btn.addEventListener('click', () => _handleAnswerSelection(btn.dataset.answer));
   });
   document.getElementById('submit-fill')?.addEventListener('click', () => {
-    submitQuizAnswer(document.getElementById('fill-answer')?.value || '');
+    _handleAnswerSelection(document.getElementById('fill-answer')?.value || '');
   });
-  _initPointerDragSort('drag-list', 'submit-drag', order => submitQuizAnswer(order));
+  _initPointerDragSort('drag-list', 'submit-drag', order => _handleAnswerSelection(order));
   document.getElementById('quiz-flag-btn')?.addEventListener('click', () => {
     const nowFlagged = store.toggleFlag(q.id);
     const btn = document.getElementById('quiz-flag-btn');
@@ -1939,7 +2507,7 @@ function renderQuizQuestion() {
   document.getElementById('submit-multi')?.addEventListener('click', () => {
     const answer = [...document.querySelectorAll('.multi-check')]
       .filter(c => c.checked).map(c => c.value);
-    submitQuizAnswer(answer);
+    _handleAnswerSelection(answer);
   });
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
@@ -1957,11 +2525,11 @@ function renderQuizQuestion() {
         if (idx >= 0 && idx < (_q.options?.length ?? 0)) {
           e.preventDefault();
           _removeQuizKeyHandler();
-          submitQuizAnswer(String(idx));
+          _handleAnswerSelection(String(idx));
         }
       } else if (_q.type === 'true_false') {
-        if (k === 'T' || k === 'Y') { e.preventDefault(); _removeQuizKeyHandler(); submitQuizAnswer('true'); }
-        if (k === 'F' || k === 'N') { e.preventDefault(); _removeQuizKeyHandler(); submitQuizAnswer('false'); }
+        if (k === 'T' || k === 'Y') { e.preventDefault(); _removeQuizKeyHandler(); _handleAnswerSelection('true'); }
+        if (k === 'F' || k === 'N') { e.preventDefault(); _removeQuizKeyHandler(); _handleAnswerSelection('false'); }
       } else if (_q.type === 'multi_select') {
         const idx = ['1','2','3','4'].indexOf(k) >= 0 ? +k - 1
                   : ['A','B','C','D'].indexOf(k) >= 0 ? ['A','B','C','D'].indexOf(k)
@@ -1981,23 +2549,73 @@ function renderQuizQuestion() {
   }
 }
 
-function submitQuizAnswer(answer) {
+function submitQuizAnswer(answer, confidence = null) {
   if (!quiz) return;
   _removeQuizKeyHandler();
+  _removeConfKeyHandler();
   const currentQ = quiz.currentQuestion;
-  const result   = quiz.answer(answer);
+  const result   = quiz.answer(answer, confidence);
 
   // Track mistakes for Notebook (wrong answers accumulate)
   if (!result.correct && currentQ) store.recordMistake(currentQ.id);
 
   const feedback = document.getElementById('quiz-feedback');
   if (feedback) {
+    const CONF_LABELS = ['Guess','Unsure','Maybe','Sure','Certain'];
+    const confLabel = confidence !== null
+      ? ` <span class="text-purple-400 text-xs ml-2">&#127919; ${CONF_LABELS[confidence - 1]}</span>`
+      : '';
+    let srsNote = '';
+    if (quiz.opts.srs && confidence !== null && result.correct) {
+      if (confidence <= 2) srsNote = ' <span class="text-amber-700 text-[10px] ml-1">(SRS reset — low confidence)</span>';
+      else if (confidence === 3) srsNote = ' <span class="text-amber-800 text-[10px] ml-1">(SRS: half-step)</span>';
+    }
+
+    // Distractor notes: shown when question has distractor_notes field (MC only)
+    let distractorHtml = '';
+    if (currentQ?.type === 'multiple_choice' && currentQ.distractor_notes?.length) {
+      const correctIdx = String(currentQ.correct_answer);
+      const noteItems = (currentQ.options || []).map((opt, i) => {
+        if (String(i) === correctIdx) return '';
+        const note = currentQ.distractor_notes[i];
+        if (!note) return '';
+        const isUserPick = String(i) === String(answer);
+        return `<div class="text-xs leading-relaxed ${isUserPick ? 'text-amber-300' : 'text-gray-500'}">
+          <span class="font-mono mr-1 ${isUserPick ? 'text-amber-500' : 'text-gray-600'}">${String.fromCharCode(65 + i)}.</span>${isUserPick ? '<span class="text-amber-500 text-[10px] font-semibold">your pick — </span>' : ''}${note}
+        </div>`;
+      }).filter(Boolean).join('');
+      if (noteItems) {
+        if (result.correct) {
+          distractorHtml = `<details class="mt-2 border-t border-gray-700 pt-2">
+            <summary class="text-[10px] text-gray-600 font-mono cursor-pointer hover:text-gray-400 select-none">WHY OTHERS PICK WRONG &#9658;</summary>
+            <div class="mt-1.5 space-y-1.5">${noteItems}</div>
+          </details>`;
+        } else {
+          distractorHtml = `<div class="mt-2 border-t border-red-900 pt-2">
+            <p class="text-[10px] font-mono mb-1.5 text-red-500">WHY PEOPLE PICK THESE:</p>
+            <div class="space-y-1.5">${noteItems}</div>
+          </div>`;
+        }
+      }
+    }
+
+    // Prereq links — only shown on wrong answers
+    const prereqHtml = !result.correct ? _prereqLinksHtml(currentQ?.tags) : '';
+
     feedback.classList.remove('hidden');
     feedback.className = `mt-4 p-3 rounded text-sm ${result.correct ? 'bg-green-900 border border-green-600 text-green-200' : 'bg-red-900 border border-red-700 text-red-200'}`;
     feedback.innerHTML = `
       <span class="font-bold">${result.correct ? '✓ Correct!' : '✗ Incorrect'}</span>
       ${result.xpGained ? ` <span class="text-green-400 text-xs ml-2">+${result.xpGained} XP</span>` : ''}
-      ${result.explanation ? `<p class="mt-1 text-xs opacity-80">${result.explanation}</p>` : ''}`;
+      ${confLabel}${srsNote}
+      ${result.explanation ? `<p class="mt-1 text-xs opacity-80">${result.explanation}</p>` : ''}
+      ${_citationHtml(currentQ?.source_ref)}
+      ${distractorHtml}${prereqHtml}`;
+
+    // Wire up prereq navigation buttons
+    feedback.querySelectorAll('.prereq-link').forEach(btn => {
+      btn.addEventListener('click', () => _goToPrereq(btn.dataset.prereqType, btn.dataset.prereqId));
+    });
   }
 
   // Flash/shake the chosen answer button
@@ -2026,6 +2644,15 @@ function submitQuizAnswer(answer) {
   } else {
     setTimeout(() => renderQuizQuestion(), 1500);
   }
+}
+
+/** Returns a collapsible 📖 Source badge for a question's source_ref, or '' if absent. */
+function _citationHtml(sourceRef, extraClass = '') {
+  if (!sourceRef) return '';
+  return `<details class="mt-1.5 ${extraClass}">
+    <summary class="text-[10px] text-gray-500 font-mono cursor-pointer hover:text-gray-300 select-none inline-flex items-center gap-1">&#128218; Source &#9658;</summary>
+    <p class="mt-1 text-[11px] text-gray-500 leading-relaxed pl-1">${sourceRef}</p>
+  </details>`;
 }
 
 function _buildReviewDetail(q, userAnswer) {
@@ -2079,7 +2706,7 @@ function _buildReviewDetail(q, userAnswer) {
     : '';
 
   return `<div class="text-gray-200 text-xs font-medium mb-2">${q.question}</div>
-    <div class="space-y-0.5 text-xs">${optionsHtml}</div>${expHtml}`;
+    <div class="space-y-0.5 text-xs">${optionsHtml}</div>${expHtml}${_citationHtml(q.source_ref)}`;
 }
 
 function renderQuizSummary(summary) {
@@ -2103,6 +2730,56 @@ function renderQuizSummary(summary) {
       </div>`;
   }).join('');
 
+  // Build session quality panel if data is available
+  let qualityHtml = '';
+  if (_lastSessionQuality) {
+    const q = _lastSessionQuality;
+    const label = q.score >= 90 ? 'Excellent' : q.score >= 75 ? 'Great' : q.score >= 60 ? 'Good' : q.score >= 40 ? 'Fair' : 'Weak';
+    const labelColor = q.score >= 90 ? 'text-green-400' : q.score >= 75 ? 'text-green-500' : q.score >= 60 ? 'text-yellow-400' : q.score >= 40 ? 'text-orange-400' : 'text-red-400';
+    const barColor   = q.score >= 75 ? 'bg-green-500' : q.score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+    function miniBar(pts, max, color) {
+      const pct = Math.round((pts / max) * 100);
+      return `<div class="flex items-center gap-2">
+        <div class="flex-1 bg-gray-800 rounded-full h-1.5">
+          <div class="${color} h-1.5 rounded-full transition-all" style="width:${pct}%"></div>
+        </div>
+        <span class="text-gray-400 w-6 text-right text-[10px]">${pts}</span>
+      </div>`;
+    }
+    qualityHtml = `
+    <div class="bg-gray-900 border border-gray-700 rounded p-4 mb-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-xs text-gray-500 uppercase tracking-widest">Session Quality</h3>
+        <div class="flex items-baseline gap-1.5">
+          <span class="text-2xl font-bold ${labelColor}">${q.score}</span>
+          <span class="text-xs ${labelColor} font-semibold">${label}</span>
+          <span class="text-gray-600 text-xs">/100</span>
+        </div>
+      </div>
+      <div class="w-full bg-gray-800 rounded-full h-2 mb-3">
+        <div class="${barColor} h-2 rounded-full transition-all" style="width:${q.score}%"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+        <div>
+          <div class="text-gray-600 mb-0.5">Accuracy <span class="text-gray-700">(×0.40)</span></div>
+          ${miniBar(q.accuracy, 40, 'bg-blue-500')}
+        </div>
+        <div>
+          <div class="text-gray-600 mb-0.5">SRS Reviews <span class="text-gray-700">${q.srsReviewed} items</span></div>
+          ${miniBar(q.srsScore, 20, 'bg-purple-500')}
+        </div>
+        <div>
+          <div class="text-gray-600 mb-0.5">New Questions <span class="text-gray-700">${q.newQs} seen</span></div>
+          ${miniBar(q.newScore, 20, 'bg-teal-500')}
+        </div>
+        <div>
+          <div class="text-gray-600 mb-0.5">Time on Task <span class="text-gray-700">${q.elapsedMins}m</span></div>
+          ${miniBar(q.timeScore, 20, 'bg-amber-500')}
+        </div>
+      </div>
+    </div>`;
+  }
+
   area.innerHTML = `
     <div class="bg-gray-900 border border-gray-700 rounded p-6">
       <div class="text-center mb-5">
@@ -2111,6 +2788,7 @@ function renderQuizSummary(summary) {
         <div class="text-gray-400 text-sm mb-1">${summary.correct}/${summary.total} correct · +${summary.totalXP} XP earned</div>
         <div class="text-xs text-gray-600">Click any row to review the question</div>
       </div>
+      ${qualityHtml}
       <div id="quiz-result-list" class="mb-5 max-h-96 overflow-y-auto space-y-0.5 pr-1">${resultRows}</div>
       <div class="text-center">
         <button id="quiz-again" class="px-5 py-2 bg-green-700 hover:bg-green-600 text-white rounded font-semibold text-sm">
@@ -2364,6 +3042,72 @@ function _drawRadarFrame(canvas, labels, values, progress) {
     ctx.textAlign = Math.cos(a) > 0.2 ? 'left' : Math.cos(a) < -0.2 ? 'right' : 'center';
     ctx.fillText(values[i] > 0 ? values[i] + '%' : '—', lx, ly + 12);
   }
+}
+
+/**
+ * Renders a sparkline SVG of session quality scores into containerId.
+ * Shows the last N sessions (up to 30).
+ */
+function _renderSessionSparkline(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const history = store.sessionHistory;
+  if (history.length < 2) {
+    container.innerHTML = '<p class="text-gray-600 text-xs italic">Complete 2+ Grind sessions to see your quality trend.</p>';
+    return;
+  }
+
+  const W = container.clientWidth || 480;
+  const H = 56;
+  const PAD_X = 4, PAD_Y = 6;
+  const scores = history.map(s => s.score);
+  const minV = 0, maxV = 100;
+
+  function xOf(i) { return PAD_X + (i / (scores.length - 1)) * (W - PAD_X * 2); }
+  function yOf(v) { return PAD_Y + (1 - (v - minV) / (maxV - minV)) * (H - PAD_Y * 2); }
+
+  // Build polyline points
+  const pts = scores.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
+
+  // Filled area path (close down to bottom)
+  const areaPath = `M${xOf(0).toFixed(1)},${yOf(scores[0]).toFixed(1)} ` +
+    scores.map((v, i) => `L${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ') +
+    ` L${xOf(scores.length - 1).toFixed(1)},${H} L${xOf(0).toFixed(1)},${H} Z`;
+
+  // Last value dot + label
+  const lastScore = scores[scores.length - 1];
+  const lastX = xOf(scores.length - 1);
+  const lastY = yOf(lastScore);
+  const dotColor = lastScore >= 75 ? '#22c55e' : lastScore >= 50 ? '#eab308' : '#ef4444';
+
+  // Avg line
+  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const avgY = yOf(avg).toFixed(1);
+
+  container.innerHTML = `
+    <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="overflow:visible">
+      <defs>
+        <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#22c55e" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <!-- Avg reference line -->
+      <line x1="${PAD_X}" y1="${avgY}" x2="${W - PAD_X}" y2="${avgY}"
+            stroke="#374151" stroke-width="1" stroke-dasharray="3,3"/>
+      <text x="${PAD_X + 2}" y="${Number(avgY) - 3}" font-size="8" fill="#4b5563" font-family="monospace">avg ${avg}</text>
+      <!-- Fill area -->
+      <path d="${areaPath}" fill="url(#spark-grad)"/>
+      <!-- Line -->
+      <polyline points="${pts}" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <!-- Last point dot -->
+      <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3" fill="${dotColor}" stroke="#111827" stroke-width="1.5"/>
+    </svg>
+    <div class="flex justify-between text-[10px] text-gray-600 mt-0.5 font-mono">
+      <span>${history.length} sessions</span>
+      <span>Latest: <span style="color:${dotColor}">${lastScore}</span>/100</span>
+    </div>`;
 }
 
 function renderStats() {
@@ -2752,6 +3496,21 @@ function renderStats() {
         </div>
       </div>
 
+      <!-- Session Quality Sparkline -->
+      <div class="bg-gray-900 border border-gray-700 rounded p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm text-gray-400 uppercase tracking-widest">Session Quality</h3>
+          <span class="text-xs text-gray-600">last 30 Grind sessions</span>
+        </div>
+        <div class="text-[10px] text-gray-600 mb-2 grid grid-cols-4 gap-x-2">
+          <span><span class="text-blue-400">■</span> Accuracy ×0.40</span>
+          <span><span class="text-purple-400">■</span> SRS reviews ×0.20</span>
+          <span><span class="text-teal-400">■</span> New Qs ×0.20</span>
+          <span><span class="text-amber-400">■</span> Time ×0.20</span>
+        </div>
+        <div id="session-sparkline-container"></div>
+      </div>
+
       <!-- Study Heatmap -->
       <div class="bg-gray-900 border border-gray-700 rounded p-5">
         <div class="flex items-center justify-between mb-3">
@@ -2778,6 +3537,24 @@ function renderStats() {
         </div>
       </div>
 
+      <!-- Share Progress -->
+      <div class="bg-gray-900 border border-gray-700 rounded p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm text-gray-400 uppercase tracking-widest">Share Progress</h3>
+          <span class="text-xs text-gray-600">Discord / Reddit / group chat</span>
+        </div>
+        <p class="text-xs text-gray-600 mb-3">Generates a plain-text summary card you can paste anywhere. No server needed.</p>
+        <div id="share-preview" class="bg-gray-950 border border-gray-800 rounded p-3 font-mono text-xs text-green-400 whitespace-pre-wrap leading-relaxed mb-3 hidden"></div>
+        <div class="flex gap-2">
+          <button id="share-generate" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs border border-gray-600 rounded transition-colors">
+            Generate Card
+          </button>
+          <button id="share-copy" class="hidden px-4 py-2 bg-green-900/40 hover:bg-green-900/70 text-green-300 text-xs border border-green-800 rounded transition-colors">
+            Copy to Clipboard
+          </button>
+        </div>
+      </div>
+
       ${totalSessions > 0 ? `
       <div class="text-center flex justify-center gap-6">
         <button id="clear-history" class="text-xs text-gray-700 hover:text-red-400 transition-colors">
@@ -2789,9 +3566,10 @@ function renderStats() {
       </div>` : ''}
     </div>`;
 
-  // Draw radar chart and heatmap after DOM is ready
+  // Draw radar chart, sparkline, and heatmap after DOM is ready
   setTimeout(() => {
     _drawRadar('radar-canvas', domains, radarValues);
+    _renderSessionSparkline('session-sparkline-container');
     _renderHeatmap('heatmap-container');
   }, 0);
 
@@ -2833,6 +3611,77 @@ function renderStats() {
       store.clearSRS();
       renderStats();
     }
+  });
+
+  // Share Progress — generate plain-text summary card
+  document.getElementById('share-generate')?.addEventListener('click', () => {
+    const allTime = history.reduce((acc, s) => {
+      acc.correct += s.correct || 0;
+      acc.total   += s.total   || 0;
+      return acc;
+    }, { correct: 0, total: 0 });
+    const overallAcc = allTime.total > 0 ? Math.round((allTime.correct / allTime.total) * 100) : 0;
+
+    const topWeak = weakDomains.slice(0, 3).map(d => `  • ${d.domain} — ${d.pct}%`).join('\n');
+    const streakLine = store.state.streak?.current > 0
+      ? `🔥 Streak: ${store.state.streak.current} day${store.state.streak.current !== 1 ? 's' : ''} (longest: ${store.state.streak.longest || store.state.streak.current})`
+      : '🔥 Streak: —';
+
+    const daysLine = store.daysUntilExam !== null
+      ? `📅 Exam in: ${store.daysUntilExam} day${store.daysUntilExam !== 1 ? 's' : ''}`
+      : '';
+
+    const labLine = `🖥  Labs done: ${store.state.completedLabs?.length || 0}/${content.labs?.length || 0}`;
+
+    const sessionQualLine = store.sessionHistory.length > 0
+      ? `📊 Last session quality: ${store.sessionHistory[store.sessionHistory.length - 1].score}/100`
+      : '';
+
+    const lines = [
+      '```',
+      '╔══════════════════════════════════╗',
+      '║     CCNA MASTERY — PROGRESS      ║',
+      '╚══════════════════════════════════╝',
+      `👤 ${store.state.playerName}  |  Lv.${store.state.level}  |  ${store.state.xp.toLocaleString()} XP`,
+      `🎯 Readiness: ${readiness}% (${readinessLabel})`,
+      `✅ Accuracy: ${overallAcc}% over ${allTime.total} questions`,
+      streakLine,
+      labLine,
+      sessionQualLine,
+      daysLine,
+      topWeak ? `\n🔍 Weakest domains:\n${topWeak}` : '',
+      '',
+      '🚀 CCNA Mastery — free, offline, gamified',
+      '   ccna-mastery.pages.dev',
+      '```',
+    ].filter(Boolean).join('\n');
+
+    const preview = document.getElementById('share-preview');
+    const copyBtn = document.getElementById('share-copy');
+    if (preview) { preview.textContent = lines; preview.classList.remove('hidden'); }
+    if (copyBtn) copyBtn.classList.remove('hidden');
+    copyBtn._shareText = lines;
+  });
+
+  document.getElementById('share-copy')?.addEventListener('click', function() {
+    const text = this._shareText || '';
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = this.textContent;
+      this.textContent = 'Copied!';
+      this.classList.add('bg-green-800');
+      setTimeout(() => { this.textContent = orig; this.classList.remove('bg-green-800'); }, 2000);
+    }).catch(() => {
+      // Fallback for browsers without clipboard API
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Copied to clipboard!', 2000);
+    });
   });
 
   // Export save — download game state as .json file
@@ -2985,6 +3834,21 @@ function renderExam() {
 }
 
 function startExam() {
+  // Exam needs all weeks — if still loading, wait and retry
+  if (!_allWeeksLoaded()) {
+    const area = document.getElementById('exam-area');
+    if (area) {
+      area.classList.remove('hidden');
+      area.innerHTML = `<div class="flex flex-col items-center gap-3 py-16 text-center">
+        <div class="text-2xl animate-pulse">⏳</div>
+        <p class="text-yellow-400 font-semibold">Loading question bank…</p>
+        <p class="text-gray-500 text-xs">Starting exam once all weeks are ready.</p>
+      </div>`;
+    }
+    _ensureAllWeeksLoaded().then(() => startExam());
+    return;
+  }
+
   // Build proportional session by sampling from each domain
   const allQ = content.questions.filter(q => q.type !== 'cli_lab');
   const session = [];
@@ -3197,7 +4061,8 @@ function submitExamAnswer(answer) {
     feedback.className = `mt-4 p-3 rounded text-sm ${isRight ? 'bg-green-900 border border-green-700 text-green-200' : 'bg-red-900 border border-red-700 text-red-200'}`;
     feedback.innerHTML = `
       <span class="font-bold">${isRight ? '✓ Correct' : '✗ Incorrect'}</span>
-      ${!isRight && q.explanation ? `<p class="mt-1 text-xs opacity-80">${q.explanation}</p>` : ''}`;
+      ${!isRight && q.explanation ? `<p class="mt-1 text-xs opacity-80">${q.explanation}</p>` : ''}
+      ${_citationHtml(q.source_ref)}`;
   }
 
   document.querySelectorAll('.exam-option').forEach(b => { b.disabled = true; b.style.pointerEvents = 'none'; });
@@ -3951,7 +4816,7 @@ function startFlash() {
   const show    = document.getElementById('flash-show')?.value || 'all';
   const count   = parseInt(document.getElementById('flash-count')?.value || '20', 10);
 
-  let pool = content.questions.filter(q => q.type !== 'cli_lab' && q.type !== 'drag_drop' && q.type !== 'ordering');
+  let pool = [...content.questions, ...store.getCustomQuestions()].filter(q => q.type !== 'cli_lab' && q.type !== 'drag_drop' && q.type !== 'ordering');
   if (domain !== 'all') pool = pool.filter(q => q.domain === domain);
   if (week   !== 'all') pool = pool.filter(q => q.week == week);
 
@@ -4025,7 +4890,7 @@ function renderFlashCard() {
           <!-- Front -->
           <div class="fc-front absolute inset-0 bg-gray-900 border border-purple-800 rounded-xl p-6 flex flex-col justify-between">
             <div>
-              <div class="text-[10px] text-gray-600 uppercase tracking-widest mb-2">${q.domain} · ${q.type.replace('_', ' ')}</div>
+              <div class="text-[10px] text-gray-600 uppercase tracking-widest mb-2">${q.domain} · ${q.type.replace('_', ' ')}${q._custom ? ' · <span class="text-purple-500">&#9998; custom</span>' : ''}</div>
               <p class="text-white text-base leading-relaxed font-medium">${q.question}</p>
             </div>
             <p class="text-center text-xs text-gray-600 mt-4">Tap to reveal answer · Space</p>
@@ -4037,6 +4902,22 @@ function renderFlashCard() {
               <div class="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Answer</div>
               <p class="text-cyan-300 text-base font-semibold leading-relaxed mb-3">${ans}</p>
               ${q.explanation ? `<p class="text-gray-400 text-sm leading-relaxed border-t border-gray-800 pt-3">${q.explanation}</p>` : ''}
+              ${_citationHtml(q.source_ref, 'border-t border-gray-800 pt-2')}
+              ${(() => {
+                if (q.type !== 'multiple_choice' || !q.distractor_notes?.length) return '';
+                const correctIdx = String(q.correct_answer);
+                const noteItems = (q.options || []).map((opt, i) => {
+                  if (String(i) === correctIdx) return '';
+                  const note = q.distractor_notes[i];
+                  if (!note) return '';
+                  return `<div class="text-xs text-gray-500 leading-relaxed"><span class="font-mono text-gray-600 mr-1">${String.fromCharCode(65+i)}.</span>${note}</div>`;
+                }).filter(Boolean).join('');
+                if (!noteItems) return '';
+                return `<details class="mt-2 border-t border-gray-800 pt-2">
+                  <summary class="text-[10px] text-gray-600 font-mono cursor-pointer hover:text-gray-400 select-none">WHY OTHERS PICK WRONG &#9658;</summary>
+                  <div class="mt-1.5 space-y-1.5">${noteItems}</div>
+                </details>`;
+              })()}
             </div>
             <div class="flex gap-3 mt-4">
               <button id="flash-missed" class="flex-1 py-2.5 bg-red-900 hover:bg-red-700 border border-red-700 text-red-200 rounded-lg font-semibold text-sm transition-colors">
@@ -4734,6 +5615,22 @@ function _exportNotebook() {
     });
   }
 
+  // ── Custom Questions ──
+  const customQs = store.getCustomQuestions();
+  lines.push('');
+  lines.push(`## ✏️ Custom Questions (${customQs.length})`);
+  lines.push('');
+  if (customQs.length === 0) {
+    lines.push('*No custom questions created yet. Use the Create Question form in the Notebook view.*');
+  } else {
+    customQs.forEach((q, idx) => {
+      lines.push(`### ${idx + 1}.`);
+      lines.push(...formatQuestion(q));
+      lines.push('---');
+      lines.push('');
+    });
+  }
+
   lines.push('');
   lines.push('---');
   lines.push('*Exported from CCNA Mastery — free, offline, gamified CCNA 200-301 study app.*');
@@ -4753,12 +5650,121 @@ function _exportNotebook() {
   URL.revokeObjectURL(url);
 }
 
+function _exportToAnki() {
+  const questionMap = {};
+  content.questions.forEach(q => { questionMap[q.id] = q; });
+
+  const flaggedIds  = store.getFlaggedIds();
+  const mistakeIds  = Object.keys(store.state.mistakeNotebook || {});
+  const customQs    = store.getCustomQuestions();
+
+  // Deduplicate: flagged + mistakes + custom, preserve order
+  const seen = new Set();
+  const ids = [...flaggedIds, ...mistakeIds];
+  const dedupedQs = [];
+  ids.forEach(id => {
+    if (!seen.has(id)) { seen.add(id); dedupedQs.push(questionMap[id]); }
+  });
+  customQs.forEach(q => {
+    if (!seen.has(q.id)) { seen.add(q.id); dedupedQs.push(q); }
+  });
+
+  function ankiFront(q) {
+    if (!q) return '';
+    let front = q.question || '';
+    if ((q.type === 'multiple_choice' || q.type === 'multi_select') && q.options) {
+      front += '\n\n' + q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join('\n');
+      if (q.type === 'multi_select') front += '\n\n(Select all that apply)';
+    } else if (q.type === 'drag_drop' && q.items) {
+      front += '\n\nArrange in correct order:\n' + q.items.map((item, i) => `${i + 1}. ${item}`).join('\n');
+    }
+    // Escape for Anki (basic HTML encoding)
+    return front.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+  }
+
+  function ankiBack(q) {
+    if (!q) return '';
+    let back = '';
+    if (q.type === 'multiple_choice' && q.options) {
+      const idx = Number(q.correct_answer);
+      back = `<b>${String.fromCharCode(65 + idx)}. ${q.options[idx] || ''}</b>`;
+    } else if (q.type === 'true_false') {
+      const ans = String(q.correct_answer).toLowerCase() === 'true' ? 'True' : 'False';
+      back = `<b>${ans}</b>`;
+    } else if (q.type === 'multi_select' && q.options) {
+      const correct = Array.isArray(q.correct_answer) ? q.correct_answer.map(String) : [String(q.correct_answer)];
+      const letters = correct.map(i => String.fromCharCode(65 + Number(i))).join(', ');
+      const answers = correct.map(i => q.options[Number(i)]).join('; ');
+      back = `<b>${letters}: ${answers}</b>`;
+    } else if (q.type === 'drag_drop') {
+      const items = Array.isArray(q.correct_answer) ? q.correct_answer : [];
+      back = '<b>Correct order:</b><br>' + items.map((item, i) => `${i + 1}. ${item}`).join('<br>');
+    } else {
+      back = `<b>${q.correct_answer || ''}</b>`;
+    }
+    if (q.explanation) {
+      back += `<br><br>${q.explanation.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}`;
+    }
+    return back;
+  }
+
+  function ankiTags(q) {
+    if (!q) return 'ccna';
+    const tags = ['ccna'];
+    if (q.domain) tags.push(q.domain.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''));
+    if (q.difficulty) tags.push(q.difficulty);
+    if (q.week != null) tags.push(`week_${q.week}`);
+    if (q._custom) tags.push('custom');
+    if (flaggedIds.includes(q.id)) tags.push('flagged');
+    if (store.state.mistakeNotebook?.[q.id]) tags.push('mistake');
+    return tags.join(' ');
+  }
+
+  const lines = [
+    '#separator:tab',
+    '#html:true',
+    '#notetype:Basic',
+    '#deck:CCNA Mastery',
+    '#tags column:3',
+  ];
+
+  let exported = 0;
+  dedupedQs.forEach(q => {
+    if (!q) return;
+    const front = ankiFront(q);
+    const back  = ankiBack(q);
+    if (!front || !back) return;
+    lines.push(`${front}\t${back}\t${ankiTags(q)}`);
+    exported++;
+  });
+
+  if (exported === 0) {
+    alert('No questions to export. Flag questions or make some mistakes first!');
+    return;
+  }
+
+  const dateSlug = new Date().toISOString().slice(0, 10);
+  const filename = `ccna-anki-${dateSlug}.txt`;
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain; charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(`Exported ${exported} cards → ${filename}. Import via Anki → File → Import.`, 4000);
+}
+
 function renderNotebook() {
   const view        = getView();
   const mistakeIds  = store.getMistakeIds(2);  // wrong ≥ 2 times
   const allMistakes = Object.entries(store.state.mistakeNotebook || {})
     .sort(([, a], [, b]) => b - a);            // most wrong first
   const flaggedIds  = store.getFlaggedIds();
+  const customQs    = store.getCustomQuestions();
 
   // Map question IDs to question objects
   const questionMap = {};
@@ -4796,16 +5802,32 @@ function renderNotebook() {
     </div>`;
   }).join('');
 
+  const DOMAINS_LIST = QuizEngine.domainsFrom(content.questions);
+  const customRows = customQs.map((q, idx) => `
+    <div class="flex items-start gap-3 py-2 border-b border-gray-800 text-xs">
+      <span class="text-purple-400 shrink-0">&#9998;</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-gray-300 truncate">${q.question?.substring(0, 80) || ''}...</div>
+        <div class="text-gray-600 mt-0.5">${q.domain} · ${q.difficulty} · Week ${q.week}</div>
+      </div>
+      <button data-delete-custom="${q.id}" class="text-gray-700 hover:text-red-400 text-[10px] shrink-0 transition-colors">delete</button>
+    </div>`).join('');
+
   view.innerHTML = `
     <div class="max-w-2xl mx-auto p-6 space-y-5">
       <div class="flex items-center justify-between">
         <h2 class="text-orange-400 font-bold text-xl">Mistake Notebook</h2>
         <div class="flex items-center gap-3">
-          <span class="text-xs text-gray-600">${mistakeQs.length} mistake${mistakeQs.length !== 1 ? 's' : ''} · ${flaggedIds.length} flagged</span>
+          <span class="text-xs text-gray-600">${mistakeQs.length} mistake${mistakeQs.length !== 1 ? 's' : ''} · ${flaggedIds.length} flagged · ${customQs.length} custom</span>
           <button id="export-notebook-btn"
             class="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-600 hover:border-gray-500 rounded transition-colors"
             title="Download flagged + mistake questions as a Markdown file">
             ↓ Export Notes
+          </button>
+          <button id="export-anki-btn"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-900/40 hover:bg-blue-900/70 text-blue-300 border border-blue-800 hover:border-blue-600 rounded transition-colors"
+            title="Export flagged + mistake questions in Anki import format (.txt)">
+            ↓ Anki Export
           </button>
         </div>
       </div>
@@ -4847,12 +5869,125 @@ function renderNotebook() {
           Clear mistake history
         </button>
       </div>` : ''}
+
+      <!-- ✏️ Custom Questions -->
+      <div class="bg-gray-900 border border-purple-900/50 rounded p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm text-purple-400 uppercase tracking-widest">&#9998; Custom Questions</h3>
+          <span class="text-xs text-gray-600">${customQs.length} created</span>
+        </div>
+        <p class="text-gray-400 text-xs">Create your own MC questions. They appear in Grind and Flashcard with a ✏️ badge.</p>
+
+        ${customQs.length > 0 ? `
+        <button id="start-custom-drill" class="w-full py-2.5 bg-purple-900 hover:bg-purple-800 text-purple-200 rounded font-semibold text-sm">
+          Drill Custom Questions (${customQs.length})
+        </button>
+        <div class="mt-2 space-y-0">${customRows}</div>` : `
+        <p class="text-gray-600 text-xs italic">No custom questions yet. Use the form below to create one.</p>`}
+
+        <!-- Create Question Form -->
+        <details id="create-q-details" class="mt-2">
+          <summary class="cursor-pointer text-xs text-purple-500 hover:text-purple-300 font-mono select-none">+ Create a New Question ▶</summary>
+          <form id="create-q-form" class="mt-3 space-y-3">
+            <div>
+              <label class="block text-[11px] text-gray-500 mb-1">Question text *</label>
+              <textarea id="cq-question" rows="3" required
+                class="w-full bg-gray-800 border border-gray-700 focus:border-purple-600 rounded px-2 py-1.5 text-sm text-gray-200 resize-y"
+                placeholder="Enter your question..."></textarea>
+            </div>
+            <div class="space-y-2">
+              <label class="block text-[11px] text-gray-500">Options * <span class="text-gray-600">(select the correct one)</span></label>
+              ${[0,1,2,3].map(i => `
+              <div class="flex items-center gap-2">
+                <input type="radio" name="cq-correct" value="${i}" id="cq-radio-${i}" class="accent-purple-500" ${i === 0 ? 'checked' : ''}>
+                <label for="cq-radio-${i}" class="text-purple-400 font-mono text-xs w-4">${String.fromCharCode(65+i)}.</label>
+                <input type="text" id="cq-opt-${i}" required
+                  class="flex-1 bg-gray-800 border border-gray-700 focus:border-purple-600 rounded px-2 py-1 text-xs text-gray-200"
+                  placeholder="Option ${String.fromCharCode(65+i)}">
+              </div>`).join('')}
+            </div>
+            <div>
+              <label class="block text-[11px] text-gray-500 mb-1">Explanation <span class="text-gray-600">(optional)</span></label>
+              <textarea id="cq-explanation" rows="2"
+                class="w-full bg-gray-800 border border-gray-700 focus:border-purple-600 rounded px-2 py-1.5 text-xs text-gray-200 resize-y"
+                placeholder="Why is this the correct answer?"></textarea>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[11px] text-gray-500 mb-1">Domain</label>
+                <select id="cq-domain" class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-200">
+                  ${DOMAINS_LIST.map(d => `<option value="${d}">${d}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] text-gray-500 mb-1">Difficulty</label>
+                <select id="cq-difficulty" class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-200">
+                  <option value="easy">Easy</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] text-gray-500 mb-1">Week</label>
+                <select id="cq-week" class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-200">
+                  ${[1,2,3,4,5,6].map(w => `<option value="${w}">Week ${w}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div id="cq-error" class="hidden text-xs text-red-400"></div>
+            <button type="submit"
+              class="w-full py-2 bg-purple-800 hover:bg-purple-700 text-purple-100 rounded font-semibold text-sm transition-colors">
+              Save Question
+            </button>
+          </form>
+        </details>
+      </div>
+
     </div>`;
 
   document.getElementById('export-notebook-btn')?.addEventListener('click', _exportNotebook);
+  document.getElementById('export-anki-btn')?.addEventListener('click', _exportToAnki);
 
   document.getElementById('start-flag-drill')?.addEventListener('click', () => {
     startNotebookDrill(flaggedQs);
+  });
+
+  document.getElementById('start-custom-drill')?.addEventListener('click', () => {
+    startNotebookDrill(customQs);
+  });
+
+  // Delete custom question buttons
+  document.querySelectorAll('[data-delete-custom]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (confirm('Delete this custom question?')) {
+        store.deleteCustomQuestion(btn.dataset.deleteCustom);
+        renderNotebook();
+      }
+    });
+  });
+
+  // Create question form submission
+  document.getElementById('create-q-form')?.addEventListener('submit', e => {
+    e.preventDefault();
+    const errorEl = document.getElementById('cq-error');
+    const question    = document.getElementById('cq-question').value.trim();
+    const opts        = [0,1,2,3].map(i => document.getElementById(`cq-opt-${i}`).value.trim());
+    const correctVal  = document.querySelector('input[name="cq-correct"]:checked')?.value ?? '0';
+    const explanation = document.getElementById('cq-explanation').value.trim();
+    const domain      = document.getElementById('cq-domain').value;
+    const difficulty  = document.getElementById('cq-difficulty').value;
+    const week        = Number(document.getElementById('cq-week').value);
+
+    if (!question) { errorEl.textContent = 'Question text is required.'; errorEl.classList.remove('hidden'); return; }
+    if (opts.some(o => !o)) { errorEl.textContent = 'All four options are required.'; errorEl.classList.remove('hidden'); return; }
+    errorEl.classList.add('hidden');
+
+    store.addCustomQuestion({ question, options: opts, correct_answer: correctVal, explanation, domain, difficulty, week });
+    renderNotebook();
+    // Re-open the form details in case the user wants to add more
+    setTimeout(() => {
+      document.getElementById('create-q-details')?.setAttribute('open', '');
+    }, 50);
   });
 
   document.getElementById('clear-flags')?.addEventListener('click', () => {

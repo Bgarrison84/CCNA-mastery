@@ -3,6 +3,10 @@
  *
  * Loads questions from content.json, filters by domain/difficulty,
  * tracks spaced repetition scores, and awards XP on completion.
+ *
+ * Adaptive mode (opts.adaptive): questions are selected one-at-a-time using a
+ * per-difficulty sliding window. After each answer the engine reweights the
+ * three difficulty buckets to keep the learner near the 60–70 % challenge zone.
  */
 import { bus } from '../core/EventBus.js';
 
@@ -22,15 +26,47 @@ export class QuizEngine {
    * @param {number}   opts.count       - questions per session (default 10)
    * @param {boolean}  opts.shuffle     - randomize order (default true)
    */
+  /**
+   * Adaptive mode constants
+   * WINDOW  – how many recent answers per difficulty tier inform the weight
+   * TARGET  – desired accuracy (mid-point of the 60–70 % challenge zone)
+   * MIN_N   – minimum answers before overriding the default weight
+   */
+  static get ADAPTIVE_WINDOW() { return 8; }
+  static get ADAPTIVE_TARGET() { return 0.65; }
+  static get ADAPTIVE_MIN_N()  { return 3; }
+
   constructor(questions, store, opts = {}) {
     this.store      = store;
-    this.opts       = { count: 10, shuffle: true, difficulty: 'all', domain: 'all', requeueWrong: false, srs: false, ...opts };
+    this.opts       = { count: 10, shuffle: true, difficulty: 'all', domain: 'all', requeueWrong: false, srs: false, adaptive: false, ...opts };
 
     this._pool      = this._filter(questions);
-    this._session   = this._buildSession();
+
+    // ── Adaptive-mode setup ────────────────────────────────────────────────
+    // Adaptive only makes sense when difficulty is 'all' and SRS is off.
+    this._adaptive  = this.opts.adaptive && !this.opts.srs && this.opts.difficulty === 'all';
+
+    if (this._adaptive) {
+      // Organise pool into shuffled difficulty buckets for lazy picking
+      this._buckets     = { easy: [], medium: [], hard: [] };
+      for (const q of this._pool) {
+        const t = q.difficulty || 'medium';
+        (this._buckets[t] || (this._buckets[t] = [])).push(q);
+      }
+      Object.values(this._buckets).forEach(b => this._shuffle(b));
+      this._window      = [];  // [{ difficulty, correct }]
+      this._totalCount  = Math.min(this.opts.count, this._pool.length);
+      // Start with one question so start() has something to show
+      this._session     = [];
+      const first = this._pickAdaptive();
+      if (first) this._session.push(first);
+    } else {
+      this._session     = this._buildSession();
+    }
+
     this.currentIdx = 0;
-    this.results    = [];    // [{ questionId, correct, timeMs, xpGained }]
-    this._requeued  = new Set();   // question IDs already re-queued (re-queue once only)
+    this.results    = [];
+    this._requeued  = new Set();
     this.active     = false;
     this.startTime  = null;
   }
@@ -51,10 +87,11 @@ export class QuizEngine {
   // ─── Answering ─────────────────────────────────────────────────────────────
 
   /**
-   * @param {string|number} answer
+   * @param {string|number}  answer
+   * @param {number|null}    confidence  1–5 rating from confidence panel (null = not rated)
    * @returns {{ correct: bool, explanation: string, xpGained: number, done: bool, summary?: object }}
    */
-  answer(answer) {
+  answer(answer, confidence = null) {
     if (!this.active) return { correct: false, explanation: 'Quiz not started.', xpGained: 0, done: false };
 
     const q       = this.currentQuestion;
@@ -65,8 +102,11 @@ export class QuizEngine {
 
     if (xp > 0) this.store.addXP(xp, `quiz:${q.id}`);
 
-    // Update SRS schedule after every answer in SRS mode
-    if (this.opts.srs) this.store.updateSRS(q.id, isRight);
+    // Update SRS schedule, passing confidence so low-confidence correct answers don't advance
+    if (this.opts.srs) this.store.updateSRS(q.id, isRight, confidence);
+
+    // Record confidence rating (always, not just in SRS mode)
+    if (confidence !== null) this.store.recordConfidence(q.id, confidence, isRight);
 
     this.results.push({
       questionId: q.id,
@@ -75,6 +115,7 @@ export class QuizEngine {
       xpGained:   xp,
       answer,
       correctAnswer: q.correct_answer,
+      confidence,
     });
 
     // Re-queue wrong answers once ~5 questions later so the player gets a second attempt
@@ -82,6 +123,13 @@ export class QuizEngine {
       this._requeued.add(q.id);
       const insertAt = Math.min(this.currentIdx + 5, this._session.length);
       this._session.splice(insertAt, 0, q);
+    }
+
+    // ── Adaptive: update window and enqueue next question ──────────────────
+    if (this._adaptive && this.results.length < this._totalCount) {
+      this._window.push({ difficulty: q.difficulty || 'medium', correct: isRight });
+      const next = this._pickAdaptive();
+      if (next) this._session.push(next);
     }
 
     bus.emit('quiz:answered', { correct: isRight, xp, question: q });
@@ -180,6 +228,73 @@ export class QuizEngine {
     return pool.slice(0, this.opts.count);
   }
 
+  // ─── Adaptive difficulty selection ─────────────────────────────────────────
+
+  /**
+   * Pick the next question from the difficulty bucket that best moves overall
+   * accuracy toward the 60–70 % challenge zone.
+   *
+   * Weight formula per tier:
+   *   acc < 60 %  → desire = acc            (too hard → de-emphasise)
+   *   acc > 70 %  → desire = 1 − acc        (too easy → de-emphasise)
+   *   60–70 %     → desire = 1.0            (in the zone → keep serving)
+   *   < MIN_N answers → desire = 0.5        (not enough data, neutral weight)
+   */
+  _pickAdaptive() {
+    const W      = QuizEngine.ADAPTIVE_WINDOW;
+    const TARGET = QuizEngine.ADAPTIVE_TARGET;
+    const MIN_N  = QuizEngine.ADAPTIVE_MIN_N;
+    const tiers  = ['easy', 'medium', 'hard'];
+
+    // Per-tier accuracy from the sliding window
+    const desire = {};
+    for (const tier of tiers) {
+      if (!this._buckets[tier]?.length) { desire[tier] = 0; continue; }
+      const recent  = this._window.filter(w => w.difficulty === tier).slice(-W);
+      if (recent.length < MIN_N) { desire[tier] = 0.5; continue; }
+      const acc = recent.filter(w => w.correct).length / recent.length;
+      if (acc < 0.60)      desire[tier] = acc;           // too hard
+      else if (acc > 0.70) desire[tier] = 1 - acc;       // too easy
+      else                 desire[tier] = 1.0;            // in the zone
+    }
+
+    // Weighted random pick
+    const total = tiers.reduce((s, t) => s + desire[t], 0);
+    if (total === 0) {
+      // All buckets depleted or zero weight — pick from any non-empty bucket
+      const any = tiers.find(t => this._buckets[t]?.length > 0);
+      return any ? this._buckets[any].pop() : null;
+    }
+    let rand = Math.random() * total;
+    for (const tier of tiers) {
+      rand -= desire[tier];
+      if (rand <= 0 && this._buckets[tier]?.length > 0) {
+        return this._buckets[tier].pop();
+      }
+    }
+    // Fallback (floating-point edge case)
+    const any = tiers.find(t => this._buckets[t]?.length > 0);
+    return any ? this._buckets[any].pop() : null;
+  }
+
+  /**
+   * Per-tier accuracy stats from the adaptive window.
+   * Returns null when not in adaptive mode.
+   * Shape: { easy: { acc, n } | null, medium: ..., hard: ... }
+   */
+  get adaptiveStats() {
+    if (!this._adaptive) return null;
+    const tiers = ['easy', 'medium', 'hard'];
+    const stats = {};
+    for (const tier of tiers) {
+      const recent = this._window.filter(w => w.difficulty === tier);
+      stats[tier] = recent.length > 0
+        ? { acc: Math.round(recent.filter(w => w.correct).length / recent.length * 100), n: recent.length }
+        : null;
+    }
+    return stats;
+  }
+
   /** SRS stats for the current filtered pool. */
   get srsStats() {
     if (!this.opts.srs) return null;
@@ -199,7 +314,8 @@ export class QuizEngine {
   }
 
   get progress() {
-    return { current: this.currentIdx + 1, total: this._session.length };
+    const total = this._adaptive ? this._totalCount : this._session.length;
+    return { current: this.currentIdx + 1, total };
   }
 
   get domains() {
