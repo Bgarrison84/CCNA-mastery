@@ -83219,6 +83219,547 @@
         3
       ],
       "explanation": "NAPALM (Network Automation and Programmability Abstraction Layer with Multivendor support) provides a unified get_*/load_merge_candidate()/commit_config() API across vendors. It CAN push config (load_replace_candidate, load_merge_candidate). compare_config() shows diffs before commit. It's agentless like Netmiko."
+    },
+    {
+      "id": "q_dn_nf_001",
+      "type": "multiple_choice",
+      "domain": "Network Fundamentals",
+      "week": 1,
+      "difficulty": "easy",
+      "question": "At which OSI layer does a router primarily make forwarding decisions?",
+      "options": ["Layer 1 — Physical", "Layer 2 — Data Link", "Layer 3 — Network", "Layer 4 — Transport"],
+      "correct_answer": "2",
+      "explanation": "Routers operate at Layer 3 (Network) and forward packets based on destination IP addresses in their routing table.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 2",
+      "tags": ["osi"],
+      "distractor_notes": [
+        "Layer 1 devices (hubs, repeaters) just regenerate signals — they have no concept of addressing.",
+        "Switches operate at Layer 2 using MAC addresses; they switch frames within a broadcast domain, not between networks.",
+        null,
+        "Layer 4 (TCP/UDP) handles end-to-end reliability and port numbers — routers don't inspect TCP headers to make forwarding decisions."
+      ]
+    },
+    {
+      "id": "q_dn_nf_002",
+      "type": "multiple_choice",
+      "domain": "Network Fundamentals",
+      "week": 1,
+      "difficulty": "easy",
+      "question": "Which statement best explains why TCP is considered reliable while UDP is not?",
+      "options": [
+        "TCP uses a checksum; UDP does not",
+        "TCP uses acknowledgements and retransmission; UDP does not",
+        "TCP is encrypted; UDP is sent in plaintext",
+        "TCP segments are smaller than UDP datagrams"
+      ],
+      "correct_answer": "1",
+      "explanation": "TCP reliability comes from its acknowledgement (ACK) mechanism and retransmission of lost segments. UDP has no acknowledgement or retransmission.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 3",
+      "tags": ["tcp_udp"],
+      "distractor_notes": [
+        "Both TCP and UDP include a checksum for error detection — but detecting an error is not the same as recovering from it via retransmission.",
+        null,
+        "Encryption is handled by TLS, which works over both TCP and UDP — neither protocol is inherently encrypted.",
+        "Segment size is unrelated to reliability — large TCP segments are still reliably delivered via acknowledgements."
+      ]
+    },
+    {
+      "id": "q_dn_nf_003",
+      "type": "multiple_choice",
+      "domain": "Network Fundamentals",
+      "week": 1,
+      "difficulty": "easy",
+      "question": "Which range defines the Class B private IP address space (RFC 1918)?",
+      "options": [
+        "10.0.0.0 – 10.255.255.255",
+        "172.16.0.0 – 172.31.255.255",
+        "172.0.0.0 – 172.255.255.255",
+        "192.168.0.0 – 192.168.255.255"
+      ],
+      "correct_answer": "1",
+      "explanation": "The Class B private range is 172.16.0.0/12, covering 172.16.0.0–172.31.255.255 — 16 consecutive /16 networks.",
+      "source_ref": "RFC 1918; CCNA 200-301 OCG Vol 1 Ch. 12",
+      "tags": ["subnetting"],
+      "distractor_notes": [
+        "10.0.0.0/8 is the Class A private range — a single /8 with over 16 million addresses.",
+        null,
+        "A common mistake — the private range starts at 172.16, not 172.0. Addresses 172.0–172.15 are public.",
+        "192.168.0.0/16 is the Class C private range — the smallest of the three RFC 1918 blocks."
+      ]
+    },
+    {
+      "id": "q_dn_nf_004",
+      "type": "multiple_choice",
+      "domain": "Network Fundamentals",
+      "week": 1,
+      "difficulty": "medium",
+      "question": "A switch port in full-duplex mode can send and receive simultaneously. Which issue does this eliminate?",
+      "options": [
+        "Broadcast storms",
+        "MAC address table overflow",
+        "Collisions (CSMA/CD)",
+        "Spanning tree loops"
+      ],
+      "correct_answer": "2",
+      "explanation": "Full-duplex uses separate transmit and receive paths, eliminating collisions. CSMA/CD is disabled in full-duplex because simultaneous send/receive cannot produce collisions.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 2",
+      "tags": ["switching"],
+      "distractor_notes": [
+        "Broadcast storms are caused by Layer 2 loops — they are prevented by STP, not by changing the duplex mode.",
+        "MAC table overflow is a CAM overflow attack — duplex mode has no effect on the MAC address table.",
+        null,
+        "Spanning tree loops are a topology issue — STP prevents them regardless of whether ports run half- or full-duplex."
+      ]
+    },
+    {
+      "id": "q_dn_na_001",
+      "type": "multiple_choice",
+      "domain": "Network Access",
+      "week": 2,
+      "difficulty": "medium",
+      "question": "In STP, which bridge wins the root bridge election?",
+      "options": [
+        "The bridge with the highest Bridge ID",
+        "The bridge with the lowest Bridge ID",
+        "The bridge with the highest IP address",
+        "The bridge with the most active ports"
+      ],
+      "correct_answer": "1",
+      "explanation": "STP elects the bridge with the lowest Bridge ID (BID) as root. BID = priority (default 32768) + VLAN ID + MAC address. Lowest MAC breaks ties when priority is equal.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 9",
+      "tags": ["stp"],
+      "distractor_notes": [
+        "Highest BID loses the election — STP always prefers the lowest value, following the 'lowest wins' convention throughout STP.",
+        null,
+        "IP addresses are a Layer 3 concept — STP operates entirely at Layer 2 and has no awareness of IP.",
+        "Port count is not part of STP's election algorithm — a switch with fewer ports can still win if its BID is lowest."
+      ]
+    },
+    {
+      "id": "q_dn_na_002",
+      "type": "multiple_choice",
+      "domain": "Network Access",
+      "week": 2,
+      "difficulty": "medium",
+      "question": "How does an 802.1Q trunk port handle frames belonging to the native VLAN?",
+      "options": [
+        "It tags them with VLAN 0",
+        "It sends them untagged",
+        "It drops them to prevent native VLAN leakage",
+        "It tags them with the native VLAN ID"
+      ],
+      "correct_answer": "1",
+      "explanation": "Native VLAN frames are sent untagged across an 802.1Q trunk. Both ends must agree on the native VLAN ID or frames will be misassigned.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 8",
+      "tags": ["trunking", "vlan"],
+      "distractor_notes": [
+        "VLAN 0 is reserved — native VLAN frames carry no tag at all, not a VLAN 0 tag.",
+        null,
+        "Dropping native VLAN frames would break the trunk — native VLAN forwarding untagged is standard 802.1Q behaviour.",
+        "Native VLAN frames are specifically NOT tagged — being sent untagged is the defining characteristic of the native VLAN."
+      ]
+    },
+    {
+      "id": "q_dn_na_003",
+      "type": "multiple_choice",
+      "domain": "Network Access",
+      "week": 2,
+      "difficulty": "medium",
+      "question": "Which LACP mode combination successfully forms an EtherChannel?",
+      "options": [
+        "active – active",
+        "passive – passive",
+        "on – active",
+        "desirable – active"
+      ],
+      "correct_answer": "0",
+      "explanation": "LACP active mode sends LACP PDUs. active–active forms a bundle because both sides initiate. passive–passive fails because neither side initiates.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 10",
+      "tags": ["etherchannel"],
+      "distractor_notes": [
+        null,
+        "passive–passive means both sides wait for the other to initiate — neither sends LACP PDUs, so no EtherChannel forms.",
+        "'on' forces the channel without negotiation; combining it with LACP active causes a protocol mismatch and no bundle forms.",
+        "'desirable' is a PAgP keyword, not LACP — mixing PAgP and LACP modes on the two ends prevents EtherChannel formation."
+      ]
+    },
+    {
+      "id": "q_dn_na_004",
+      "type": "multiple_choice",
+      "domain": "Network Access",
+      "week": 2,
+      "difficulty": "easy",
+      "question": "Which statement about a switch access port is correct?",
+      "options": [
+        "It carries traffic for multiple VLANs using 802.1Q tags",
+        "It belongs to exactly one VLAN and does not tag frames",
+        "It must have a native VLAN configured",
+        "It requires DTP to be enabled"
+      ],
+      "correct_answer": "1",
+      "explanation": "An access port is assigned to a single VLAN. Frames entering and leaving an access port are untagged — the VLAN association is maintained internally by the switch.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 8",
+      "tags": ["vlan"],
+      "distractor_notes": [
+        "Carrying multiple VLANs with 802.1Q tags describes a trunk port, not an access port.",
+        null,
+        "Native VLANs are a trunk port concept — access ports belong to one VLAN and have no native VLAN setting.",
+        "DTP negotiates trunk formation — it is not required for access ports, and best practice is to disable it on them."
+      ]
+    },
+    {
+      "id": "q_dn_ic_001",
+      "type": "multiple_choice",
+      "domain": "IP Connectivity",
+      "week": 3,
+      "difficulty": "easy",
+      "question": "What is the default Administrative Distance (AD) for OSPF?",
+      "options": ["90", "100", "110", "120"],
+      "correct_answer": "2",
+      "explanation": "OSPF has a default AD of 110. Lower AD is preferred: EIGRP internal = 90, OSPF = 110, RIP = 120.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 14",
+      "tags": ["ospf", "routing"],
+      "distractor_notes": [
+        "90 is EIGRP internal AD — a common mix-up since both are interior gateway protocols.",
+        "100 is IGRP (obsolete Cisco proprietary protocol) — rarely encountered but memorised by some learners.",
+        null,
+        "120 is RIP AD — less preferred than OSPF, meaning the router chooses OSPF over RIP when both exist."
+      ]
+    },
+    {
+      "id": "q_dn_ic_002",
+      "type": "multiple_choice",
+      "domain": "IP Connectivity",
+      "week": 3,
+      "difficulty": "medium",
+      "question": "A router has routes to 192.168.1.0/24 and 192.168.1.64/26. Which route is used for a packet destined for 192.168.1.80?",
+      "options": [
+        "192.168.1.0/24 — it was installed first",
+        "192.168.1.64/26 — it is the longest prefix match",
+        "Neither — the router drops the packet (ambiguous match)",
+        "Both routes equally — traffic is load-balanced"
+      ],
+      "correct_answer": "1",
+      "explanation": "Routers always use the longest prefix match. 192.168.1.80 falls in both /24 and /26, but /26 is more specific (26 bits vs 24), so it wins.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 13",
+      "tags": ["routing", "static_routes"],
+      "distractor_notes": [
+        "Installation order has no bearing on route selection — the routing table always uses the most specific match regardless of age.",
+        null,
+        "Ambiguous matches don't cause drops — the most specific route always wins. Drops only occur when no route matches at all.",
+        "Equal-cost load balancing requires identical prefixes via multiple equal-cost paths — a /24 and /26 are different networks."
+      ]
+    },
+    {
+      "id": "q_dn_ic_003",
+      "type": "multiple_choice",
+      "domain": "IP Connectivity",
+      "week": 3,
+      "difficulty": "medium",
+      "question": "On an OSPF multi-access segment, what is the primary criterion for DR election?",
+      "options": [
+        "Lowest Router ID wins",
+        "Highest Router ID wins",
+        "Highest OSPF priority wins; Router ID is the tiebreaker",
+        "Lowest OSPF priority wins; Router ID is the tiebreaker"
+      ],
+      "correct_answer": "2",
+      "explanation": "OSPF DR election first compares priority (default 1, range 0–255; 0 = ineligible). Highest priority wins. If tied, highest Router ID breaks the tie.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 21",
+      "tags": ["ospf"],
+      "distractor_notes": [
+        "Lowest Router ID would mean the least-capable router wins — OSPF uses highest to let administrators control DR placement.",
+        "Router ID alone is only the tiebreaker — priority is checked first and overrides Router ID.",
+        null,
+        "Lowest priority would prevent administrators from pinning the DR — OSPF uses highest so you can force a specific router to win."
+      ]
+    },
+    {
+      "id": "q_dn_ic_004",
+      "type": "multiple_choice",
+      "domain": "IP Connectivity",
+      "week": 3,
+      "difficulty": "easy",
+      "question": "Which route type acts as the gateway of last resort on a Cisco router?",
+      "options": [
+        "A host route (/32)",
+        "A default route (0.0.0.0/0)",
+        "A summary route",
+        "A floating static route"
+      ],
+      "correct_answer": "1",
+      "explanation": "A default route (0.0.0.0/0) matches every destination and is used when no more specific route exists. 'ip route 0.0.0.0 0.0.0.0 <next-hop>' sets the gateway of last resort.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 13",
+      "tags": ["routing", "static_routes"],
+      "distractor_notes": [
+        "A /32 host route matches only one IP — it is the most specific possible route, the opposite of a gateway of last resort.",
+        null,
+        "A summary route aggregates multiple networks into one prefix — it still requires a destination match, unlike a default route.",
+        "A floating static route is a backup route with elevated AD — it can be configured as a default, but 'floating static' alone doesn't make it a default."
+      ]
+    },
+    {
+      "id": "q_dn_is_001",
+      "type": "multiple_choice",
+      "domain": "IP Services",
+      "week": 4,
+      "difficulty": "easy",
+      "question": "In the DHCP DORA process, what does the client send after receiving a DHCPOFFER?",
+      "options": ["DHCPACK", "DHCPDISCOVER", "DHCPREQUEST", "DHCPRELEASE"],
+      "correct_answer": "2",
+      "explanation": "DORA = Discover → Offer → Request → Acknowledge. After the Offer, the client broadcasts a DHCPREQUEST to formally accept it and inform other servers it was not chosen.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 6",
+      "tags": ["dhcp"],
+      "distractor_notes": [
+        "DHCPACK is the server's final confirmation — it comes after the REQUEST, not before it.",
+        "DHCPDISCOVER is the first step — re-broadcasting after receiving an Offer would restart the process unnecessarily.",
+        null,
+        "DHCPRELEASE is sent when a client gives up its lease — it is not part of the initial DORA sequence."
+      ]
+    },
+    {
+      "id": "q_dn_is_002",
+      "type": "multiple_choice",
+      "domain": "IP Services",
+      "week": 4,
+      "difficulty": "medium",
+      "question": "What is the key difference between static NAT and PAT (NAT overload)?",
+      "options": [
+        "Static NAT maps one private IP to one public IP; PAT translates port numbers to allow many-to-one mapping",
+        "PAT translates private to public; static NAT translates public to private",
+        "Static NAT is for outbound only; PAT works bidirectionally",
+        "PAT requires a public IP pool; static NAT uses only one public IP"
+      ],
+      "correct_answer": "0",
+      "explanation": "Static NAT provides a fixed one-to-one mapping. PAT (overload) adds port-number translation so many private IPs can share one public IP tracked by unique source ports.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 7",
+      "tags": ["nat"],
+      "distractor_notes": [
+        null,
+        "Both translate private-to-public — the difference is one-to-one vs many-to-one, not the direction of translation.",
+        "Both are primarily used for outbound traffic — direction alone is not what distinguishes them.",
+        "PAT requires only ONE public IP (it overloads a single address) — dynamic NAT is the type that requires an IP pool."
+      ]
+    },
+    {
+      "id": "q_dn_is_003",
+      "type": "multiple_choice",
+      "domain": "IP Services",
+      "week": 4,
+      "difficulty": "medium",
+      "question": "A device listed as NTP stratum 1 synchronises its time from which source?",
+      "options": [
+        "An atomic clock or GPS receiver (stratum 0 reference)",
+        "Another stratum 1 NTP server",
+        "The local hardware clock of the router",
+        "A public internet time server"
+      ],
+      "correct_answer": "0",
+      "explanation": "Stratum 1 servers are directly connected to stratum 0 reference clocks (GPS, atomic, radio signals). Stratum 0 devices are the physical clocks — they do not serve NTP.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 8",
+      "tags": ["ntp"],
+      "distractor_notes": [
+        null,
+        "A server synchronising from another stratum 1 becomes stratum 2 — each NTP hop increments the stratum by 1.",
+        "Synchronising from the local hardware clock results in stratum 16 (unsynchronised) — the internal oscillator is not a trusted time source.",
+        "Public internet time servers are typically stratum 2 or higher — a true stratum 1 connects directly to GPS or atomic hardware."
+      ]
+    },
+    {
+      "id": "q_dn_is_004",
+      "type": "multiple_choice",
+      "domain": "IP Services",
+      "week": 4,
+      "difficulty": "easy",
+      "question": "Which port does DNS use for standard queries?",
+      "options": ["TCP/UDP 53", "TCP 443", "UDP 67/68", "TCP 25"],
+      "correct_answer": "0",
+      "explanation": "DNS uses UDP port 53 for standard queries and TCP port 53 for zone transfers and responses exceeding 512 bytes.",
+      "source_ref": "CCNA 200-301 OCG Vol 1 Ch. 6",
+      "tags": ["dns"],
+      "distractor_notes": [
+        null,
+        "TCP 443 is HTTPS — the secure web protocol, not DNS.",
+        "UDP 67 and 68 are DHCP server and client ports.",
+        "TCP 25 is SMTP — the email relay protocol, not DNS."
+      ]
+    },
+    {
+      "id": "q_dn_sf_001",
+      "type": "multiple_choice",
+      "domain": "Security Fundamentals",
+      "week": 5,
+      "difficulty": "easy",
+      "question": "What happens to traffic that does not match any entry in a Cisco ACL?",
+      "options": [
+        "It is forwarded with a log warning",
+        "It is held in a queue until a match is found",
+        "It is implicitly denied",
+        "It is forwarded by default to maintain connectivity"
+      ],
+      "correct_answer": "2",
+      "explanation": "All Cisco ACLs end with an implicit 'deny any'. Unmatched traffic is silently dropped — no explicit deny rule is needed.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 3",
+      "tags": ["acl"],
+      "distractor_notes": [
+        "There is no automatic log on the implicit deny — you must add an explicit 'deny any log' entry to capture unmatched traffic.",
+        "ACLs process packets top-down with immediate permit/deny decisions — there is no queue or wait mechanism.",
+        null,
+        "Forwarding by default would be a security risk — the implicit deny ensures only explicitly permitted traffic passes."
+      ]
+    },
+    {
+      "id": "q_dn_sf_002",
+      "type": "multiple_choice",
+      "domain": "Security Fundamentals",
+      "week": 5,
+      "difficulty": "medium",
+      "question": "Where should a standard ACL be placed for most effective traffic filtering?",
+      "options": [
+        "As close to the source as possible",
+        "As close to the destination as possible",
+        "On the core switch only",
+        "On every interface in both directions"
+      ],
+      "correct_answer": "1",
+      "explanation": "Standard ACLs match only source IP. Near the source, a standard ACL blocks that source from ALL destinations. Near the destination, it gives fine-grained control over which traffic reaches that specific target.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 3",
+      "tags": ["acl"],
+      "distractor_notes": [
+        "Close to source is the rule for EXTENDED ACLs (which can match source, destination, and port). Standard ACLs only match source IP, so placing them near the source is too broad.",
+        null,
+        "Only on the core creates a single enforcement point and may miss traffic routed around it.",
+        "Applying ACLs on every interface in both directions creates excessive overhead and is very difficult to manage."
+      ]
+    },
+    {
+      "id": "q_dn_sf_003",
+      "type": "multiple_choice",
+      "domain": "Security Fundamentals",
+      "week": 5,
+      "difficulty": "medium",
+      "question": "Which statement correctly distinguishes TACACS+ from RADIUS?",
+      "options": [
+        "RADIUS separates authentication and authorisation; TACACS+ combines them",
+        "TACACS+ separates authentication, authorisation, and accounting; RADIUS combines authentication and authorisation",
+        "TACACS+ uses UDP; RADIUS uses TCP",
+        "RADIUS encrypts the entire packet; TACACS+ encrypts only the password"
+      ],
+      "correct_answer": "1",
+      "explanation": "TACACS+ separates AAA into three independent services, enabling per-command authorisation. RADIUS combines authentication and authorisation. TACACS+ = TCP/49; RADIUS = UDP/1812-1813.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 5",
+      "tags": ["aaa"],
+      "distractor_notes": [
+        "This reverses the correct answer — TACACS+ separates AAA, not RADIUS.",
+        null,
+        "This is backwards: TACACS+ uses TCP (reliable, port 49); RADIUS uses UDP (1812/1813).",
+        "This is also backwards: TACACS+ encrypts the entire payload; RADIUS encrypts only the password field."
+      ]
+    },
+    {
+      "id": "q_dn_sf_004",
+      "type": "multiple_choice",
+      "domain": "Security Fundamentals",
+      "week": 5,
+      "difficulty": "medium",
+      "question": "When port security violation mode is set to 'shutdown', what happens on a violation?",
+      "options": [
+        "The violating frame is dropped; the port remains up",
+        "The port enters err-disabled state and requires manual re-enable",
+        "The port disables for 30 seconds then auto-recovers",
+        "A log message is generated but traffic continues normally"
+      ],
+      "correct_answer": "1",
+      "explanation": "'Shutdown' (the default violation mode) places the port in err-disabled state, requiring 'shutdown' then 'no shutdown' to recover. It is the most restrictive of the three modes.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 5",
+      "tags": ["port_security"],
+      "distractor_notes": [
+        "Dropping the frame while keeping the port up describes 'restrict' mode, not 'shutdown'.",
+        null,
+        "Automatic recovery after a timeout is not default port security behaviour — err-disabled stays down until manually cleared.",
+        "Logging only without disabling describes 'protect' or 'restrict' — 'shutdown' is the most aggressive response."
+      ]
+    },
+    {
+      "id": "q_dn_ap_001",
+      "type": "multiple_choice",
+      "domain": "Automation & Programmability",
+      "week": 6,
+      "difficulty": "medium",
+      "question": "Which transport protocol and port does NETCONF use by default?",
+      "options": ["HTTP TCP/80", "HTTPS TCP/443", "SSH TCP/830", "SNMP UDP/161"],
+      "correct_answer": "2",
+      "explanation": "NETCONF runs over SSH on TCP port 830 (RFC 6242), providing encrypted reliable transport for YANG-modelled configuration.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 19",
+      "tags": ["netconf"],
+      "distractor_notes": [
+        "HTTP (port 80) is unencrypted and used by REST APIs, not NETCONF.",
+        "HTTPS (port 443) is used by RESTCONF (RFC 8040) — the REST-based cousin of NETCONF, but a distinct protocol.",
+        null,
+        "SNMP uses UDP/161 for polling and UDP/162 for traps — a different management protocol unrelated to NETCONF."
+      ]
+    },
+    {
+      "id": "q_dn_ap_002",
+      "type": "multiple_choice",
+      "domain": "Automation & Programmability",
+      "week": 6,
+      "difficulty": "medium",
+      "question": "Which HTTP method is both safe (read-only) and idempotent in a REST API?",
+      "options": ["POST", "PUT", "GET", "PATCH"],
+      "correct_answer": "2",
+      "explanation": "GET is safe (no side effects) and idempotent (same result each call). It retrieves a resource without modifying server state.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 19",
+      "tags": ["netconf"],
+      "distractor_notes": [
+        "POST creates a resource — neither safe nor idempotent: calling it twice typically creates two resources.",
+        "PUT replaces a resource — idempotent (same end state each call) but not safe, since it modifies state.",
+        null,
+        "PATCH partially updates a resource — not generally safe, and idempotency depends on the specific operation."
+      ]
+    },
+    {
+      "id": "q_dn_ap_003",
+      "type": "multiple_choice",
+      "domain": "Automation & Programmability",
+      "week": 6,
+      "difficulty": "easy",
+      "question": "What does it mean that Ansible is 'agentless'?",
+      "options": [
+        "Ansible does not require a controller node to run playbooks",
+        "Ansible does not need to install software on managed devices",
+        "Ansible cannot manage network devices — only Linux servers",
+        "Ansible uses UDP instead of TCP for device communications"
+      ],
+      "correct_answer": "1",
+      "explanation": "Agentless means no agent software is installed on managed devices. Ansible connects via SSH (or NETCONF for network gear) from the controller to push changes directly.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 20",
+      "tags": ["ansible"],
+      "distractor_notes": [
+        "Ansible absolutely requires a controller node — 'agentless' refers to the managed devices, not the controller.",
+        null,
+        "Ansible natively supports Cisco IOS, NX-OS, and IOS-XE via network_cli and netconf connection plugins.",
+        "Ansible uses SSH (TCP/22) or NETCONF (TCP/830) — UDP is not used for device communication."
+      ]
+    },
+    {
+      "id": "q_dn_ap_004",
+      "type": "multiple_choice",
+      "domain": "Automation & Programmability",
+      "week": 6,
+      "difficulty": "easy",
+      "question": "Which data format is most commonly used in modern REST APIs and supported as default by RESTCONF?",
+      "options": ["XML", "YAML", "JSON", "CSV"],
+      "correct_answer": "2",
+      "explanation": "JSON is the dominant format for REST APIs. RESTCONF supports both JSON and XML, but JSON is typically preferred for readability and compact payload size.",
+      "source_ref": "CCNA 200-301 OCG Vol 2 Ch. 19",
+      "tags": ["netconf", "ansible"],
+      "distractor_notes": [
+        "XML is supported by RESTCONF and NETCONF and is still widely used, but JSON has become the more popular choice for REST APIs.",
+        "YAML is used for Ansible playbooks and Kubernetes configs — REST APIs don't use YAML in HTTP responses.",
+        null,
+        "CSV is a flat file format for spreadsheets — it cannot represent the nested structures found in API responses."
+      ]
     }
   ]
 }
