@@ -318,6 +318,8 @@
       #app-view    { padding-bottom: 56px; }
       /* Bottom nav visible */
       #bottom-nav  { display: flex; }
+      /* Show hamburger button in top bar */
+      #mobile-menu-btn { display: flex !important; }
       /* Ensure lab view doesn't break on narrow screens */
       #app-view .flex.h-full { flex-direction: column; height: auto; min-height: 100%; }
       #app-view .flex.h-full > .w-64 { width: 100%; max-height: 160px; overflow-y: auto; flex-shrink: 0; }
@@ -325,6 +327,82 @@
       .quiz-option, .exam-option { min-height: 44px !important; }
       /* Nav buttons: already ~40px; nudge to 44px */
       .nav-btn { min-height: 44px; }
+      /* Move toast above bottom nav */
+      #toast-container { bottom: 72px; }
+    }
+
+    /* ── Mobile Drawer ───────────────────────────────────────── */
+    #mobile-drawer-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      backdrop-filter: blur(2px);
+    }
+    #mobile-drawer-overlay.open { display: block; }
+
+    #mobile-drawer {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: min(85vw, 300px);
+      background: #0d0d0d;
+      border-right: 1px solid rgba(0,255,65,0.25);
+      z-index: 201;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(-100%);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow-y: auto;
+    }
+    #mobile-drawer.open { transform: translateX(0); }
+
+    #mobile-drawer .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(0,255,65,0.15);
+      flex-shrink: 0;
+    }
+    #mobile-drawer .drawer-nav-btn {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 13px 16px;
+      border: none; background: transparent;
+      border-left: 2px solid transparent;
+      color: #4a7a4a;
+      font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.12s;
+      text-align: left;
+    }
+    #mobile-drawer .drawer-nav-btn:hover,
+    #mobile-drawer .drawer-nav-btn:active {
+      color: #00ff41;
+      border-left-color: #00ff41;
+      background: rgba(0,255,65,0.06);
+    }
+    #mobile-drawer .drawer-nav-btn.nav-active {
+      color: #00ff41 !important;
+      border-left-color: #00ff41 !important;
+      background: rgba(0,255,65,0.09) !important;
+    }
+    #mobile-drawer .drawer-section-label {
+      padding: 8px 16px 4px;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #2a4a2a;
+      border-top: 1px solid rgba(0,255,65,0.08);
+      margin-top: 4px;
+    }
+
+    /* Player HUD inside drawer */
+    #drawer-hud {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(0,255,65,0.15);
+      flex-shrink: 0;
     }
 
     /* Bottom nav — hidden on desktop */
@@ -483,6 +561,14 @@
     <!-- Top bar -->
     <header class="shrink-0 flex items-center justify-between px-4 py-2 border-b border-green-900/40 bg-[#0d0d0d]">
       <div class="flex items-center gap-2 text-xs text-green-700">
+        <!-- Hamburger — mobile only -->
+        <button id="mobile-menu-btn" title="Open navigation menu"
+          style="display:none"
+          class="mr-1 flex flex-col justify-center items-center gap-1 w-9 h-9 rounded border border-green-900/40 hover:border-green-700 hover:bg-green-900/20 transition-colors shrink-0">
+          <span class="w-4 h-0.5 bg-green-500 rounded"></span>
+          <span class="w-4 h-0.5 bg-green-500 rounded"></span>
+          <span class="w-4 h-0.5 bg-green-500 rounded"></span>
+        </button>
         <span class="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse"></span>
         <span>SYSTEM ONLINE</span>
         <span class="text-green-900">·</span>
@@ -490,8 +576,8 @@
         <span id="view-context" class="text-green-900"></span>
       </div>
       <div class="flex items-center gap-3 text-xs text-green-800">
-        <span>Cisco IOS 15.2 (sim)</span>
-        <span class="text-green-900">|</span>
+        <span class="hidden sm:inline">Cisco IOS 15.2 (sim)</span>
+        <span class="text-green-900 hidden sm:inline">|</span>
         <span id="clock" class="text-green-700 font-mono"></span>
       </div>
     </header>
@@ -523,7 +609,77 @@
     <span class="icon">&#128202;</span>
     <span>Stats</span>
   </button>
+  <button class="bottom-nav-btn" id="bottom-nav-more-btn">
+    <span class="icon">&#8943;</span>
+    <span>More</span>
+  </button>
 </nav>
+
+<!-- ── Mobile Navigation Drawer ──────────────────────────────────────────────── -->
+<div id="mobile-drawer-overlay"></div>
+<div id="mobile-drawer" role="dialog" aria-modal="true" aria-label="Navigation menu">
+  <!-- Drawer header -->
+  <div class="drawer-header">
+    <div>
+      <div class="text-green-400 font-bold text-sm tracking-widest glow-green">CCNA MASTERY</div>
+      <div class="text-green-900 text-[10px] tracking-widest">ALL SECTIONS</div>
+    </div>
+    <button id="mobile-drawer-close" title="Close menu"
+      class="w-9 h-9 flex items-center justify-center rounded border border-green-900/40 text-green-700 hover:text-green-400 hover:border-green-700 transition-colors text-lg leading-none">
+      &#x2715;
+    </button>
+  </div>
+
+  <!-- Mini HUD in drawer -->
+  <div id="drawer-hud">
+    <div class="flex items-center justify-between mb-1.5">
+      <span id="drawer-player-name" class="text-green-300 text-xs font-semibold truncate">Network Cadet</span>
+      <span id="drawer-level" class="text-yellow-400 text-xs font-bold border border-yellow-700 rounded px-1.5 py-0.5">LVL 1</span>
+    </div>
+    <div class="w-full rounded-full h-1.5 overflow-hidden" style="background:rgba(0,255,65,0.1);border:1px solid rgba(0,255,65,0.2)">
+      <div id="drawer-xp-bar" class="h-full rounded-full" style="width:0%;background:linear-gradient(90deg,#00cc33,#00ff41);box-shadow:0 0 8px rgba(0,255,65,0.6);transition:width 0.5s"></div>
+    </div>
+    <div id="drawer-xp-text" class="text-[10px] text-green-700 mt-1">0 XP</div>
+  </div>
+
+  <!-- Navigation items -->
+  <nav class="flex-1 py-1">
+    <div class="drawer-section-label">Study</div>
+    <button class="drawer-nav-btn" data-nav="story">&#128218; Story Mode</button>
+    <button class="drawer-nav-btn" data-nav="grind">&#128260; The Grind</button>
+    <button class="drawer-nav-btn" data-nav="exam">&#128196; Exam Sim</button>
+    <button class="drawer-nav-btn" data-nav="flash">&#9889; Flashcards</button>
+    <button class="drawer-nav-btn" data-nav="boss">&#128128; Boss Battles</button>
+
+    <div class="drawer-section-label">Practice</div>
+    <button class="drawer-nav-btn" data-nav="lab">&#128187; The Lab</button>
+    <button class="drawer-nav-btn" data-nav="subnet">&#127760; Subnetting</button>
+    <button class="drawer-nav-btn" data-nav="scripting">&#9000; Scripting</button>
+    <button class="drawer-nav-btn" data-nav="projects">&#128295; Projects</button>
+    <button class="drawer-nav-btn" data-nav="megalabs">&#127981; Mega Labs</button>
+
+    <div class="drawer-section-label">Review</div>
+    <button class="drawer-nav-btn" data-nav="reference">&#128218; Reference</button>
+    <button class="drawer-nav-btn" data-nav="notebook">&#128214; Notebook</button>
+    <button class="drawer-nav-btn" data-nav="stats">&#128202; Stats</button>
+    <button class="drawer-nav-btn" data-nav="inventory">&#127775; Inventory</button>
+  </nav>
+
+  <!-- Theme picker in drawer -->
+  <div class="px-4 py-3 border-t border-green-900/40 flex items-center gap-3 flex-shrink-0">
+    <span class="text-[10px] text-green-900 uppercase tracking-widest">Theme</span>
+    <div class="flex items-center gap-2">
+      <button class="theme-swatch active" data-theme-id="terminal-green"
+        style="background:#00ff41;" title="Terminal Green"></button>
+      <button class="theme-swatch locked" data-theme-id="amber"
+        style="background:#ffb000;" title="Amber — Level 5" id="drawer-swatch-amber">
+        <span class="lock-icon">🔒</span></button>
+      <button class="theme-swatch locked" data-theme-id="blue"
+        style="background:#00bfff;" title="Cyan — Level 8" id="drawer-swatch-blue">
+        <span class="lock-icon">🔒</span></button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Toast Notification Container ─────────────────────────────────────────── -->
 <div id="toast-container"></div>
@@ -554,6 +710,113 @@
       if (lbl) lbl.textContent = VIEW_LABELS[btn.dataset.nav] || btn.dataset.nav;
     }
   });
+</script>
+
+<!-- ── Mobile Drawer Logic ───────────────────────────────────────────────────── -->
+<script>
+(function () {
+  const drawer    = document.getElementById('mobile-drawer');
+  const overlay   = document.getElementById('mobile-drawer-overlay');
+  const openBtns  = [
+    document.getElementById('mobile-menu-btn'),
+    document.getElementById('bottom-nav-more-btn'),
+  ];
+  const closeBtn  = document.getElementById('mobile-drawer-close');
+
+  function openDrawer() {
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    // Sync mini-HUD from sidebar values
+    const syncText = (drawerEl, sidebarId) => {
+      const src = document.getElementById(sidebarId);
+      if (src && drawerEl) drawerEl.textContent = src.textContent;
+    };
+    syncText(document.getElementById('drawer-player-name'), 'hud-player-name');
+    syncText(document.getElementById('drawer-level'),       'hud-level');
+    syncText(document.getElementById('drawer-xp-text'),    'hud-xp-text');
+    const xpBar = document.getElementById('hud-xp-bar');
+    const dxp   = document.getElementById('drawer-xp-bar');
+    if (xpBar && dxp) dxp.style.width = xpBar.style.width;
+    // Sync active nav state
+    const activeNav = document.querySelector('[data-nav].nav-active, [data-nav].bottom-nav-btn.nav-active');
+    const activeView = activeNav ? activeNav.dataset.nav : null;
+    drawer.querySelectorAll('.drawer-nav-btn').forEach(btn => {
+      btn.classList.toggle('nav-active', activeView && btn.dataset.nav === activeView);
+    });
+    // Sync theme swatches
+    const activeTheme = document.querySelector('.theme-swatch.active');
+    if (activeTheme) {
+      const tid = activeTheme.dataset.themeId;
+      drawer.querySelectorAll('.theme-swatch').forEach(s => {
+        s.classList.toggle('active', s.dataset.themeId === tid);
+      });
+    }
+    // Focus the close button for keyboard accessibility
+    setTimeout(() => closeBtn.focus(), 50);
+  }
+
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  openBtns.forEach(btn => btn && btn.addEventListener('click', openDrawer));
+  closeBtn.addEventListener('click', closeDrawer);
+  overlay.addEventListener('click', closeDrawer);
+
+  // Close on Escape key
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
+  });
+
+  // Drawer nav buttons — call switchView directly (exposed on window by main.js)
+  drawer.querySelectorAll('.drawer-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      closeDrawer();
+      // Small delay so drawer close animation doesn't fight with view render
+      setTimeout(() => {
+        if (window.switchView) {
+          window.switchView(btn.dataset.nav);
+        }
+      }, 60);
+    });
+  });
+
+  // Theme swatches in drawer — delegate to sidebar swatches
+  drawer.querySelectorAll('.theme-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      const match = document.querySelector(`#app-sidebar .theme-swatch[data-theme-id="${swatch.dataset.themeId}"]`);
+      if (match) match.click();
+      // Update active state in drawer
+      drawer.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
+      swatch.classList.add('active');
+    });
+  });
+
+  // Keep drawer lock states in sync with sidebar swatches
+  const observer = new MutationObserver(() => {
+    ['amber', 'blue'].forEach(theme => {
+      const src  = document.getElementById(`swatch-${theme}`);
+      const dest = document.getElementById(`drawer-swatch-${theme}`);
+      if (!src || !dest) return;
+      const locked = src.classList.contains('locked');
+      dest.classList.toggle('locked', locked);
+      dest.style.cursor = locked ? 'not-allowed' : 'pointer';
+      const lockIcon = dest.querySelector('.lock-icon');
+      if (lockIcon) lockIcon.style.display = locked ? '' : 'none';
+    });
+  });
+  ['swatch-amber', 'swatch-blue'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  // Expose openDrawer globally so main.js can call it if needed
+  window.openMobileDrawer  = openDrawer;
+  window.closeMobileDrawer = closeDrawer;
+})();
 </script>
 
 <!-- ── App Entry Point (ES Module) ──────────────────────────────────────────── -->
