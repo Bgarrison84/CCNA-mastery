@@ -7849,7 +7849,7 @@ const SCRIPTING_THEORY = [
 <div>HOSTS=("10.0.0.1" "10.0.0.2" "10.0.0.3")</div>
 <div>&nbsp;</div>
 <div class="text-gray-500"># Loop over array</div>
-<div>for HOST in "${HOSTS[@]}"; do</div>
+<div>for HOST in "\${HOSTS[@]}"; do</div>
 <div>&nbsp;&nbsp;echo "Checking $HOST..."</div>
 <div>done</div>
 <div>&nbsp;</div>
@@ -7858,7 +7858,7 @@ const SCRIPTING_THEORY = [
 <div>if [ $? -eq 0 ]; then echo "$HOST UP"; fi</div>
 <div>&nbsp;</div>
 <div class="text-gray-500"># SSH + redirect to file</div>
-<div>ssh admin@$HOST "show run" &gt; backup_${HOST}.txt</div>
+<div>ssh admin@$HOST "show run" &gt; backup_\${HOST}.txt</div>
 <div>&nbsp;</div>
 <div class="text-gray-500"># Date stamp</div>
 <div>DATE=$(date +%Y%m%d)  <span class="text-gray-600">→</span>  20260327</div>
