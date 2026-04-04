@@ -8144,4 +8144,34 @@ function _renderScriptingLab(lab) {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+  init().catch(err => {
+    console.error('[CCNA Mastery] Fatal init error:', err);
+    // Remove any loading overlays that might be blocking the view
+    document.getElementById('loading-overlay')?.remove();
+    document.getElementById('boot-overlay')?.remove();
+    // Show a visible error in the app view so the user knows what failed
+    const view = document.getElementById('app-view');
+    if (view) {
+      view.innerHTML = `
+        <div style="padding:40px;max-width:600px;margin:0 auto;font-family:'JetBrains Mono',monospace;">
+          <div style="color:#ff4444;font-size:1.1rem;font-weight:700;margin-bottom:12px;">⚠ App failed to start</div>
+          <p style="color:#8fbc8f;font-size:0.8rem;margin-bottom:8px;">${err.message || 'Unknown error'}</p>
+          <p style="color:#4a7a4a;font-size:0.75rem;margin-bottom:20px;">
+            Make sure you're running the app through the HTTP server (launch.bat / launch.sh),
+            not opening app.html directly as a file.
+          </p>
+          <button onclick="location.reload()"
+            style="background:#00ff41;color:#000;border:none;padding:10px 24px;
+                   font-family:inherit;font-size:0.8rem;font-weight:700;
+                   border-radius:4px;cursor:pointer;">
+            ↺ Retry
+          </button>
+          <details style="margin-top:16px;">
+            <summary style="color:#3a5a3a;font-size:0.7rem;cursor:pointer;">Technical details</summary>
+            <pre style="color:#3a5a3a;font-size:0.65rem;margin-top:8px;white-space:pre-wrap;">${err.stack || err}</pre>
+          </details>
+        </div>`;
+    }
+  });
+});

@@ -84,6 +84,13 @@ export class Store {
   _openIDB() {
     return new Promise((resolve, reject) => {
       if (!globalThis.indexedDB) { reject(new Error('IDB not supported')); return; }
+
+      // Safety timeout: if IDB never calls any handler (blocked tab, buggy env),
+      // fall back to localStorage-only after 3 seconds so init() doesn't hang.
+      const timeout = setTimeout(() => reject(new Error('IDB open timed out')), 3000);
+
+      const done = (fn, arg) => { clearTimeout(timeout); fn(arg); };
+
       const req = indexedDB.open(IDB_NAME, IDB_VERSION);
       req.onupgradeneeded = ev => {
         const db = ev.target.result;
@@ -91,8 +98,11 @@ export class Store {
           db.createObjectStore(IDB_STORE);
         }
       };
-      req.onsuccess = ev => resolve(ev.target.result);
-      req.onerror   = ev => reject(ev.target.error);
+      req.onsuccess = ev => done(resolve, ev.target.result);
+      req.onerror   = ev => done(reject,  ev.target.error);
+      // Blocked means another tab holds a connection with an older version.
+      // Reject immediately so init() can proceed with localStorage-only.
+      req.onblocked = ()  => done(reject,  new Error('IDB blocked by another tab'));
     });
   }
 

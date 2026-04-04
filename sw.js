@@ -8,7 +8,7 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v4';
+const CACHE_VERSION = 'ccna-v5';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
@@ -17,6 +17,7 @@ const PRECACHE_URLS = [
   './index.html',   // landing page
   './app.html',     // the app itself
   './css/tailwind.js',
+  './manifest.json',
   './js/main.js',
   './js/core/EventBus.js',
   './js/core/Store.js',
@@ -24,6 +25,7 @@ const PRECACHE_URLS = [
   './js/engine/QuizEngine.js',
   './js/engine/Subnetting.js',
   './js/engine/Terminal.js',
+  './js/engine/ScriptingEngine.js',
   './js/ui/HUD.js',
   './js/ui/StoryMode.js',
   // Split content files (replaces monolithic content.json)
@@ -37,6 +39,7 @@ const PRECACHE_URLS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  // Diagram modules (all of them)
   './js/diagrams/osi.js',
   './js/diagrams/tcp.js',
   './js/diagrams/stp.js',
@@ -47,6 +50,12 @@ const PRECACHE_URLS = [
   './js/diagrams/ipv6.js',
   './js/diagrams/acl.js',
   './js/diagrams/subnetting.js',
+  './js/diagrams/ports.js',
+  './js/diagrams/routing.js',
+  './js/diagrams/hsrp.js',
+  './js/diagrams/snmp.js',
+  './js/diagrams/aaa.js',
+  './js/diagrams/cloud.js',
 ];
 
 // ── Install ──────────────────────────────────────────────────────────────────
