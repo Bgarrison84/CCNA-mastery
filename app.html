@@ -2,7 +2,7 @@
 <html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>CCNA Mastery — Gamified Learning</title>
 
   <link rel="manifest" href="./manifest.json">
@@ -141,7 +141,12 @@
 
     /* ── App layout fills viewport ───────────────────────────── */
     html, body { height: 100%; overflow: hidden; }
-    #app-root   { display: flex; height: 100vh; overflow: hidden; }
+    #app-root   {
+      display: flex;
+      height: 100vh;
+      height: 100dvh; /* dynamic viewport height — fixes iOS Safari address-bar clipping */
+      overflow: hidden;
+    }
     #app-view   { flex: 1; overflow-y: auto; }
 
     /* ── Glow effects ────────────────────────────────────────── */
@@ -314,8 +319,8 @@
     @media (max-width: 767px) {
       /* Hide sidebar; content fills full width */
       #app-sidebar { display: none; }
-      /* Reserve space for bottom nav */
-      #app-view    { padding-bottom: 56px; }
+      /* Reserve space for bottom nav + device safe area */
+      #app-view    { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
       /* Bottom nav visible */
       #bottom-nav  { display: flex; }
       /* Show hamburger button in top bar */
@@ -327,8 +332,8 @@
       .quiz-option, .exam-option { min-height: 44px !important; }
       /* Nav buttons: already ~40px; nudge to 44px */
       .nav-btn { min-height: 44px; }
-      /* Move toast above bottom nav */
-      #toast-container { bottom: 72px; }
+      /* Move toast above bottom nav + safe area */
+      #toast-container { bottom: calc(72px + env(safe-area-inset-bottom)); }
     }
 
     /* ── Mobile Drawer ───────────────────────────────────────── */
@@ -410,7 +415,8 @@
       display: none;
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      height: 56px;
+      height: calc(56px + env(safe-area-inset-bottom));
+      padding-bottom: env(safe-area-inset-bottom);
       background: #0d0d0d;
       border-top: 1px solid rgba(0,255,65,0.2);
       z-index: 100;
