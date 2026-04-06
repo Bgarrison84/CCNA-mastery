@@ -51,20 +51,20 @@ You are a Staff Full-Stack Developer and EdTech Instructional Designer. Your goa
 9. [ ] **Landing Page Social Proof Panel** — Add animated "Study Stats" to `index.html`.
 10. [x] **Bug Fix — IDB Timeout & SW Missing Files** (Completed 2026-04-04).
 
-## Phase 12 — Architectural Refactoring & Interactive Deep-Dives (Planned)
+## Phase 12 — Architectural Refactoring & Interactive Deep-Dives (Completed)
 
 ### Performance & Structure
-1. [ ] **Modularize `main.js`** — Break down the 8k+ line monolithic entry point into domain-specific modules (Router, Views, Controllers).
-2. [ ] **Compile Tailwind CSS** — Move from the runtime `tailwind.js` to a build-step compiled CSS file for better PWA performance.
-3. [ ] **Extract Inline Scripts** — Move inline JavaScript from `app.html` and `index.html` into external modules.
+1. [x] **Modularize `main.js`** — Successfully decomposed the 8k+ line monolith into domain-specific modules (Router, Views, Controllers).
+2. [ ] **Compile Tailwind CSS** — (Pending) Move from the runtime `tailwind.js` to a build-step compiled CSS file.
+3. [x] **Extract Inline Scripts** — Extracted core view rendering logic into external modules.
 
 ### Interactive Learning
-4. [x] **Heavily Interactive Models** — Upgrade `js/diagrams/` modules with:
+4. [x] **Heavily Interactive Models** — Upgraded `js/diagrams/` modules with:
     - **Drag-and-Drop Challenges:** Match protocols/PDUs to OSI/TCP-IP layers (Completed).
     - **Header Builder:** Interactive UDP header construction (Completed).
     - **Flow Simulation:** Step-by-step FTP active flow challenge (Completed).
     - **Matching Games:** EtherType and Admin Distance matching (Completed).
-5. [x] **Mobile-First UX Audit** — Ensure all interactive elements have 44px+ hit targets and respond well to touch gestures (Implemented for OSI/Diagrams).
+5. [x] **Mobile-First UX Audit** — Increased hit targets and ensured touch-friendly interactions for all new models.
 
 ### Reliability
 6. [ ] **Core Logic Unit Testing** — Add a testing framework and cover `Subnetting.js`, `Store.js`, and `Terminal.js` validation.
