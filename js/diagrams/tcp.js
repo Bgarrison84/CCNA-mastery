@@ -66,106 +66,122 @@ export function render(containerEl) {
       <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:#c8ffc8;">
 
         <!-- Mode toggle -->
-        <div style="display:flex;gap:8px;margin-bottom:16px;">
-          ${['connect','teardown'].map(m => `
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          ${['connect','teardown','challenge'].map(m => `
             <button class="tcp-mode" data-mode="${m}" style="
               padding:6px 16px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;
               background:${mode===m?'rgba(0,255,65,0.15)':'transparent'};
               border:1px solid ${mode===m?'rgba(0,255,65,0.4)':'rgba(0,255,65,0.15)'};
               color:${mode===m?'#00ff41':'#6a9a6a'};
-            ">${m === 'connect' ? '3-Way Handshake' : '4-Way Teardown'}</button>`).join('')}
+            ">${m === 'connect' ? '3-Way Handshake' : m === 'teardown' ? '4-Way Teardown' : 'Handshake Challenge'}</button>`).join('')}
         </div>
 
-        <!-- Progress bar -->
-        <div style="display:flex;gap:4px;margin-bottom:16px;">
-          ${steps.map((_, i) => `
-            <div style="
-              height:3px;flex:1;border-radius:2px;
-              background:${i <= step ? 'var(--terminal-green,#00ff41)' : 'rgba(0,255,65,0.12)'};
-            "></div>`).join('')}
-        </div>
+        ${mode === 'challenge' ? `
+          <div id="tcp-pane-challenge">
+            <p style="color:#6a9a6a;margin-bottom:12px;font-size:0.72rem;">
+              Drag the correct TCP flags into the sequence slots for a standard 3-way handshake.
+            </p>
+            <div style="background:#0d0d0d;border:1px solid rgba(0,255,65,0.12);border-radius:6px;padding:20px;margin-bottom:16px;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:24px;">
+                <div style="color:#a5b4fc;font-weight:700;">CLIENT</div>
+                <div style="color:#6ee7b7;font-weight:700;">SERVER</div>
+              </div>
+              
+              <!-- Slot 1 -->
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div class="tcp-slot" data-flag="SYN" style="width:100px;height:34px;border:1px dashed rgba(0,255,65,0.3);border-radius:4px;display:flex;align-items:center;justify-content:center;"></div>
+                <div style="flex:1;height:2px;background:#374151;position:relative;"><div style="position:absolute;right:-6px;top:-5px;color:#374151;">▶</div></div>
+              </div>
 
-        <!-- Sequence diagram -->
-        <div style="
-          background:#0d0d0d;border:1px solid rgba(0,255,65,0.12);
-          border-radius:6px;padding:16px;margin-bottom:12px;
-        ">
-          <!-- Column headers -->
-          <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
-            <div style="
-              padding:4px 12px;border-radius:4px;font-size:0.72rem;font-weight:700;
-              background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;
-            ">CLIENT</div>
-            <div style="
-              padding:4px 12px;border-radius:4px;font-size:0.72rem;font-weight:700;
-              background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;
-            ">SERVER</div>
+              <!-- Slot 2 -->
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div style="flex:1;height:2px;background:#374151;position:relative;"><div style="position:absolute;left:-6px;top:-5px;color:#374151;">◀</div></div>
+                <div class="tcp-slot" data-flag="SYN-ACK" style="width:100px;height:34px;border:1px dashed rgba(0,255,65,0.3);border-radius:4px;display:flex;align-items:center;justify-content:center;"></div>
+              </div>
+
+              <!-- Slot 3 -->
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div class="tcp-slot" data-flag="ACK" style="width:100px;height:34px;border:1px dashed rgba(0,255,65,0.3);border-radius:4px;display:flex;align-items:center;justify-content:center;"></div>
+                <div style="flex:1;height:2px;background:#374151;position:relative;"><div style="position:absolute;right:-6px;top:-5px;color:#374151;">▶</div></div>
+              </div>
+            </div>
+
+            <div id="tcp-flag-pool" style="display:flex;gap:12px;justify-content:center;margin-bottom:20px;padding:12px;background:rgba(255,255,255,0.02);border-radius:6px;"></div>
+            
+            <button id="tcp-check-btn" style="width:100%;padding:10px;background:#00ff41;color:#000;font-weight:700;border-radius:4px;border:none;cursor:pointer;">Validate Handshake</button>
+            <div id="tcp-challenge-fb" class="hidden" style="margin-top:12px;text-align:center;font-size:0.75rem;"></div>
           </div>
-
-          <!-- Arrow row -->
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
-            ${isClient
-              ? `<div style="width:32px;height:2px;background:#a5b4fc;"></div>
-                 <div style="color:#fbbf24;font-weight:700;font-size:0.85rem;white-space:nowrap;">${s.flag}</div>
-                 <div style="flex:1;height:2px;background:linear-gradient(90deg,#fbbf24,#fbbf24);position:relative;">
-                   <div style="position:absolute;right:-6px;top:-5px;color:#fbbf24;">▶</div>
-                 </div>
-                 <div style="width:32px;"></div>`
-              : `<div style="width:32px;"></div>
-                 <div style="flex:1;height:2px;background:linear-gradient(90deg,#34d399,#34d399);position:relative;">
-                   <div style="position:absolute;left:-6px;top:-5px;color:#34d399;">◀</div>
-                 </div>
-                 <div style="color:#fbbf24;font-weight:700;font-size:0.85rem;white-space:nowrap;">${s.flag}</div>
-                 <div style="width:32px;height:2px;background:#6ee7b7;"></div>`
-            }
-          </div>
-
-          <!-- Packet fields -->
-          <div style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:12px;">
-            ${s.seq !== '—' ? `<div style="font-size:0.7rem;"><span style="color:#6b7280;">SEQ:</span> <span style="color:#fcd34d;">${s.seq}</span></div>` : ''}
-            ${s.ack !== '—' ? `<div style="font-size:0.7rem;"><span style="color:#6b7280;">ACK:</span> <span style="color:#86efac;">${s.ack}</span></div>` : ''}
-          </div>
-
-          <!-- TCP states -->
-          <div style="display:flex;justify-content:space-between;font-size:0.65rem;">
-            <span style="color:#818cf8;">${s.state.client}</span>
-            <span style="color:#34d399;">${s.state.server}</span>
-          </div>
-        </div>
-
-        <!-- Step detail -->
-        <div style="
-          background:rgba(0,255,65,0.04);border:1px solid rgba(0,255,65,0.12);
-          border-radius:6px;padding:14px;margin-bottom:16px;
-        ">
-          <div style="font-weight:700;color:#e2e8f0;margin-bottom:6px;font-size:0.8rem;">
-            Step ${step + 1}/${total}: ${s.label}
-          </div>
-          <p style="color:#9ca3af;font-size:0.72rem;line-height:1.6;">${s.detail}</p>
-        </div>
-
+        ` : `
+          <!-- Progress bar -->
+...
         <!-- Navigation -->
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <button id="tcp-prev" style="
-            padding:8px 20px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.75rem;
-            background:transparent;border:1px solid rgba(0,255,65,0.2);color:#4a7a4a;
-            ${step === 0 ? 'visibility:hidden;' : ''}
-          ">← Prev</button>
-          <span style="color:#374151;font-size:0.7rem;">${step + 1} / ${total}</span>
-          <button id="tcp-next" style="
-            padding:8px 20px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.75rem;
-            background:${step === total-1 ? 'transparent' : 'var(--terminal-green,#00ff41)'};
-            border:1px solid ${step === total-1 ? 'rgba(0,255,65,0.2)' : 'transparent'};
-            color:${step === total-1 ? '#4a7a4a' : '#000'};font-weight:${step === total-1 ? '400' : '700'};
-          ">${step === total - 1 ? 'Done ✓' : 'Next →'}</button>
-        </div>
+...
       </div>`;
 
     containerEl.querySelectorAll('.tcp-mode').forEach(btn => {
       btn.addEventListener('click', () => { mode = btn.dataset.mode; step = 0; draw(); });
     });
-    containerEl.querySelector('#tcp-prev')?.addEventListener('click', () => { if (step > 0) { step--; draw(); } });
-    containerEl.querySelector('#tcp-next')?.addEventListener('click', () => { if (step < getSteps().length - 1) { step++; draw(); } });
+    if (mode === 'challenge') initHandshakeChallenge();
+    else {
+      containerEl.querySelector('#tcp-prev')?.addEventListener('click', () => { if (step > 0) { step--; draw(); } });
+      containerEl.querySelector('#tcp-next')?.addEventListener('click', () => { if (step < getSteps().length - 1) { step++; draw(); } });
+    }
+  }
+
+  function initHandshakeChallenge() {
+    const pool = containerEl.querySelector('#tcp-flag-pool');
+    const slots = containerEl.querySelectorAll('.tcp-slot');
+    const fb = containerEl.querySelector('#tcp-challenge-fb');
+    const checkBtn = containerEl.querySelector('#tcp-check-btn');
+
+    const flags = ['SYN', 'SYN-ACK', 'ACK', 'FIN', 'RST'].sort(() => Math.random() - 0.5);
+    flags.forEach(f => {
+      const tile = document.createElement('div');
+      tile.className = 'tcp-tile';
+      tile.textContent = f;
+      tile.dataset.flag = f;
+      tile.style = `padding:6px 14px;background:#1a1a1a;border:1px solid rgba(0,255,65,0.3);border-radius:4px;color:#00ff41;font-weight:700;cursor:grab;touch-action:none;user-select:none;font-size:0.7rem;`;
+      pool.appendChild(tile);
+
+      let isDragging = false, startX, startY;
+      tile.addEventListener('pointerdown', e => {
+        isDragging = true; startX = e.clientX; startY = e.clientY;
+        tile.setPointerCapture(e.pointerId); tile.style.zIndex = 1000; tile.style.cursor = 'grabbing';
+      });
+      tile.addEventListener('pointermove', e => {
+        if (!isDragging) return;
+        tile.style.transform = `translate(${e.clientX - startX}px, ${e.clientY - startY}px)`;
+      });
+      tile.addEventListener('pointerup', e => {
+        if (!isDragging) return;
+        isDragging = false; tile.releasePointerCapture(e.pointerId); tile.style.zIndex = ''; tile.style.cursor = 'grab'; tile.style.transform = '';
+        const rect = tile.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+        let dropped = false;
+        slots.forEach(s => {
+          const sr = s.getBoundingClientRect();
+          if (cx >= sr.left && cx <= sr.right && cy >= sr.top && cy <= sr.bottom && !s.hasChildNodes()) {
+            s.appendChild(tile); dropped = true;
+          }
+        });
+        if (!dropped) pool.appendChild(tile);
+      });
+    });
+
+    checkBtn.onclick = () => {
+      let correct = 0;
+      slots.forEach(s => {
+        const t = s.querySelector('.tcp-tile');
+        if (t && t.dataset.flag === s.dataset.flag) { correct++; s.style.borderColor = '#00ff41'; }
+        else s.style.borderColor = '#ff4444';
+      });
+      fb.classList.remove('hidden');
+      if (correct === 3) {
+        fb.innerHTML = '<span style="color:#00ff41;font-weight:700;">✅ Handshake complete! +30 XP</span>';
+        document.dispatchEvent(new CustomEvent('ccna-xp', { detail: { amount: 30, reason: 'TCP Handshake' } }));
+      } else fb.innerHTML = `<span style="color:#ffb000;">${correct}/3 correct. Try again!</span>`;
+    };
+  }
   }
 
   draw();

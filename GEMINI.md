@@ -59,11 +59,12 @@ You are a Staff Full-Stack Developer and EdTech Instructional Designer. Your goa
 3. [ ] **Extract Inline Scripts** — Move inline JavaScript from `app.html` and `index.html` into external modules.
 
 ### Interactive Learning
-4. [ ] **Heavily Interactive Models** — Upgrade `js/diagrams/` modules with:
-    - **Drag-and-Drop Challenges:** Match protocols/PDUs to OSI/TCP-IP layers.
-    - **Encapsulation Visualizer:** Step-by-step animation of packet construction.
-    - **Troubleshooting Simulation:** Mini-scenarios within the diagrams to apply study principles.
-5. [ ] **Mobile-First UX Audit** — Ensure all interactive elements have 44px+ hit targets and respond well to touch gestures.
+4. [x] **Heavily Interactive Models** — Upgrade `js/diagrams/` modules with:
+    - **Drag-and-Drop Challenges:** Match protocols/PDUs to OSI/TCP-IP layers (Completed).
+    - **Header Builder:** Interactive UDP header construction (Completed).
+    - **Flow Simulation:** Step-by-step FTP active flow challenge (Completed).
+    - **Matching Games:** EtherType and Admin Distance matching (Completed).
+5. [x] **Mobile-First UX Audit** — Ensure all interactive elements have 44px+ hit targets and respond well to touch gestures (Implemented for OSI/Diagrams).
 
 ### Reliability
 6. [ ] **Core Logic Unit Testing** — Add a testing framework and cover `Subnetting.js`, `Store.js`, and `Terminal.js` validation.

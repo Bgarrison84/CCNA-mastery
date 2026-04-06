@@ -60,6 +60,7 @@ export function render(containerEl) {
   let inputIp = '192.168.1.0';
   let inputPrefix = 24;
   let error = '';
+  let mode = 'view'; // 'view' | 'game'
 
   function parseInput(val) {
     const m = val.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s*\/\s*(\d{1,2})$/);
@@ -72,16 +73,28 @@ export function render(containerEl) {
   }
 
   function draw() {
+    containerEl.innerHTML = `
+      <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:#c8ffc8;">
+        <!-- Tab Switcher -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button class="sn-mode-btn" data-mode="view" style="padding:6px 12px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;background:${mode==='view'?'rgba(0,255,65,0.15)':'transparent'};border:1px solid ${mode==='view'?'rgba(0,255,65,0.4)':'rgba(0,255,65,0.15)'};color:${mode==='view'?'#00ff41':'#6a9a6a'};">Explorer</button>
+          <button class="sn-mode-btn" data-mode="game" style="padding:6px 12px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;background:${mode==='game'?'rgba(0,255,65,0.15)':'transparent'};border:1px solid ${mode==='game'?'rgba(0,255,65,0.4)':'rgba(0,255,65,0.15)'};color:${mode==='game'?'#00ff41':'#6a9a6a'};">ID the Subnet</button>
+        </div>
+
+        ${mode === 'view' ? renderExplorer() : renderGame()}
+      </div>`;
+
+    bindEvents();
+  }
+
+  function renderExplorer() {
     let sub = null;
     try { sub = calcSubnet(inputIp, inputPrefix); } catch(e) { error = 'Invalid IP'; }
-
     const ipBin   = sub ? toBinary(sub.ipInt) : '';
     const netBin  = sub ? toBinary(sub.netInt) : '';
     const maskBin = sub ? toBinary(cidrToMask(inputPrefix)) : '';
 
-    containerEl.innerHTML = `
-      <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:#c8ffc8;">
-
+    return `
         <!-- Input -->
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
           <input id="sn-input" type="text" value="${inputIp}/${inputPrefix}" placeholder="e.g. 192.168.1.0/24" style="
@@ -185,25 +198,143 @@ export function render(containerEl) {
             <span style="color:#fb923c;">${sub.bcast} (broadcast)</span>
           </div>
         </div>
-        ` : ''}
-      </div>`;
+        ` : ''}`;
+  }
 
-    containerEl.querySelector('#sn-calc')?.addEventListener('click', () => {
-      const val = containerEl.querySelector('#sn-input')?.value.trim() || '';
-      const parsed = parseInput(val);
-      if (parsed) { inputIp = parsed.ip; inputPrefix = parsed.prefix; error = ''; }
-      else { error = 'Invalid format — use x.x.x.x/nn (e.g. 10.0.0.0/8)'; }
-      draw();
+  function renderGame() {
+    return `
+      <div id="sn-game-pane">
+        <p style="color:#6a9a6a;font-size:0.72rem;margin-bottom:14px;">Calculate the correct parameters for the given IP/Prefix.</p>
+        <div id="sn-game-target" style="text-align:center;padding:20px;background:#0d0d0d;border:1px solid #00ff41;border-radius:8px;margin-bottom:20px;">
+          <div style="color:#6b7280;font-size:0.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.1em;">Target IP/Prefix</div>
+          <div id="sn-q-val" style="font-size:1.5rem;font-weight:800;color:#00ff41;text-shadow:0 0 10px rgba(0,255,65,0.4);">...</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <div id="sn-game-slots" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="sn-slot" data-type="net" style="border:1px dashed #374151;border-radius:6px;padding:10px;background:rgba(0,0,0,0.2);">
+              <div style="color:#6b7280;font-size:0.6rem;margin-bottom:4px;">Network ID</div>
+              <div class="slot-content" style="height:24px;"></div>
+            </div>
+            <div class="sn-slot" data-type="bcast" style="border:1px dashed #374151;border-radius:6px;padding:10px;background:rgba(0,0,0,0.2);">
+              <div style="color:#6b7280;font-size:0.6rem;margin-bottom:4px;">Broadcast</div>
+              <div class="slot-content" style="height:24px;"></div>
+            </div>
+            <div class="sn-slot" data-type="hosts" style="border:1px dashed #374151;border-radius:6px;padding:10px;background:rgba(0,0,0,0.2);">
+              <div style="color:#6b7280;font-size:0.6rem;margin-bottom:4px;">Usable Hosts</div>
+              <div class="slot-content" style="height:24px;"></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div id="sn-game-pool" style="flex:1;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;"></div>
+            <button id="sn-game-check" style="width:100%;padding:12px;background:#00ff41;color:#000;font-weight:800;border:none;border-radius:4px;cursor:pointer;">Validate Answers</button>
+          </div>
+        </div>
+        <div id="sn-game-fb" class="hidden text-center mt-4 font-bold text-sm"></div>
+      </div>`;
+  }
+
+  function bindEvents() {
+    containerEl.querySelectorAll('.sn-mode-btn').forEach(btn => {
+      btn.onclick = () => { mode = btn.dataset.mode; draw(); if(mode==='game') initGame(); };
     });
-    containerEl.querySelector('#sn-input')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') containerEl.querySelector('#sn-calc')?.click();
-    });
-    containerEl.querySelectorAll('.sn-ex').forEach(btn => {
-      btn.addEventListener('click', () => {
-        inputIp = btn.dataset.ip; inputPrefix = parseInt(btn.dataset.prefix); error = '';
+
+    if (mode === 'view') {
+      containerEl.querySelector('#sn-calc')?.addEventListener('click', () => {
+        const val = containerEl.querySelector('#sn-input')?.value.trim() || '';
+        const parsed = parseInput(val);
+        if (parsed) { inputIp = parsed.ip; inputPrefix = parsed.prefix; error = ''; }
+        else { error = 'Invalid format — use x.x.x.x/nn (e.g. 10.0.0.0/8)'; }
         draw();
       });
+      containerEl.querySelector('#sn-input')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') containerEl.querySelector('#sn-calc')?.click();
+      });
+      containerEl.querySelectorAll('.sn-ex').forEach(btn => {
+        btn.addEventListener('click', () => {
+          inputIp = btn.dataset.ip; inputPrefix = parseInt(btn.dataset.prefix); error = '';
+          draw();
+        });
+      });
+    }
+  }
+
+  let currentGame = null;
+
+  function initGame() {
+    const qEl = containerEl.querySelector('#sn-q-val');
+    const pool = containerEl.querySelector('#sn-game-pool');
+    const slots = containerEl.querySelectorAll('.sn-slot');
+    const fb = containerEl.querySelector('#sn-game-fb');
+    const checkBtn = containerEl.querySelector('#sn-game-check');
+
+    // Generate random question
+    const oct1 = [10, 172, 192][Math.floor(Math.random()*3)];
+    const oct2 = Math.floor(Math.random()*255);
+    const oct3 = Math.floor(Math.random()*255);
+    const pref = Math.floor(Math.random()*7) + 24; // /24 to /30
+    const ipStr = `${oct1}.${oct2}.${oct3}.${Math.floor(Math.random()*255)}`;
+    const sub = calcSubnet(ipStr, pref);
+    currentGame = sub;
+
+    qEl.textContent = `${sub.ip}/${pref}`;
+    pool.innerHTML = '';
+    fb.classList.add('hidden');
+    slots.forEach(s => { s.querySelector('.slot-content').innerHTML = ''; s.style.borderColor = '#374151'; });
+
+    // Correct + Distractors
+    const options = [
+      { val: sub.net, type: 'net' },
+      { val: sub.bcast, type: 'bcast' },
+      { val: sub.hosts.toString(), type: 'hosts' },
+      // Distractors
+      { val: intToIp(ipToInt(sub.net)-1), type: 'fake' },
+      { val: intToIp(ipToInt(sub.bcast)+1), type: 'fake' },
+      { val: (sub.hosts+2).toString(), type: 'fake' }
+    ].sort(() => Math.random() - 0.5);
+
+    options.forEach(opt => {
+      const tile = document.createElement('div');
+      tile.className = 'sn-tile';
+      tile.textContent = opt.val;
+      tile.dataset.val = opt.val;
+      tile.style = `padding:6px 10px;background:#1a1a1a;border:1px solid #4ade8044;border-radius:4px;color:#4ade80;font-size:0.7rem;font-weight:700;cursor:grab;touch-action:none;user-select:none;text-align:center;`;
+      pool.appendChild(tile);
+
+      let isDragging = false, sx, sy;
+      tile.onpointerdown = e => { isDragging = true; sx = e.clientX; sy = e.clientY; tile.setPointerCapture(e.pointerId); tile.style.zIndex = 1000; tile.style.cursor = 'grabbing'; };
+      tile.onpointermove = e => { if (!isDragging) return; tile.style.transform = `translate(${e.clientX - sx}px, ${e.clientY - sy}px)`; };
+      tile.onpointerup = e => {
+        if (!isDragging) return; isDragging = false; tile.releasePointerCapture(e.pointerId); tile.style.zIndex = ''; tile.style.cursor = 'grab'; tile.style.transform = '';
+        const rect = tile.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+        let dropped = false;
+        slots.forEach(s => {
+          const sr = s.getBoundingClientRect();
+          const content = s.querySelector('.slot-content');
+          if (cx >= sr.left && cx <= sr.right && cy >= sr.top && cy <= sr.bottom && !content.hasChildNodes()) {
+            content.appendChild(tile); dropped = true;
+          }
+        });
+        if (!dropped) pool.appendChild(tile);
+      };
     });
+
+    checkBtn.onclick = () => {
+      let correct = 0;
+      slots.forEach(s => {
+        const t = s.querySelector('.sn-tile');
+        const type = s.dataset.type;
+        const expected = type === 'net' ? sub.net : type === 'bcast' ? sub.bcast : sub.hosts.toString();
+        if (t && t.dataset.val === expected) { correct++; s.style.borderColor = '#00ff41'; }
+        else s.style.borderColor = '#ff4444';
+      });
+      fb.classList.remove('hidden');
+      if (correct === 3) {
+        fb.innerHTML = '<span style="color:#00ff41;">✅ Excellent! Subnet correctly identified. +60 XP</span>';
+        document.dispatchEvent(new CustomEvent('ccna-xp', { detail: { amount: 60, reason: 'Subnet Challenge' } }));
+      } else fb.innerHTML = `<span style="color:#ffb000;">${correct}/3 correct. Check your math!</span>`;
+    };
   }
 
   draw();

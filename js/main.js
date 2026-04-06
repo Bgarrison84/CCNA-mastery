@@ -17,11 +17,18 @@ import { Terminal }    from './engine/Terminal.js';
 import { BossBattle }  from './engine/BossBattle.js';
 import { QuizEngine }  from './engine/QuizEngine.js';
 import { generateIPv4Problem, validateIPv4, buildChallenge, calculateVLSM, solveSubnet } from './engine/Subnetting.js';
-import { ScriptingEngine, py, sh } from './engine/ScriptingEngine.js';
+import { spawnFloatingXP, showToast } from './utils/ui.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 const store   = new Store();
+
+// Award XP from custom events (e.g., from diagrams/models)
+document.addEventListener('ccna-xp', e => {
+  if (e.detail?.amount) {
+    store.addXP(e.detail.amount, e.detail.reason || 'interaction');
+  }
+});
 let content     = null;
 let terminal    = null;
 let quiz        = null;
@@ -280,30 +287,6 @@ const EXAM_DOMAIN_WEIGHTS = [
   { domain: 'Automation & Programmability',count: 12 },
 ];
 const EXAM_TIME_SECONDS = 120 * 60; // 120 minutes — real CCNA 200-301 format
-
-// ─── Micro-animation helpers ───────────────────────────────────────────────────
-
-/** Spawn a floating "+N XP" label near an anchor element (or viewport centre). */
-function spawnFloatingXP(amount, anchorEl) {
-  if (!amount || amount <= 0) return;
-  const el = document.createElement('div');
-  el.className = 'float-xp';
-  el.textContent = `+${amount} XP`;
-
-  // Position near anchor or fallback to bottom-centre of viewport
-  if (anchorEl) {
-    const rect = anchorEl.getBoundingClientRect();
-    el.style.left = `${rect.left + rect.width / 2 - 28}px`;
-    el.style.top  = `${rect.top - 8}px`;
-  } else {
-    el.style.left = '50%';
-    el.style.top  = '60%';
-    el.style.transform = 'translateX(-50%)';
-  }
-
-  document.body.appendChild(el);
-  el.addEventListener('animationend', () => el.remove(), { once: true });
-}
 
 // ─── Loading / Error overlays ─────────────────────────────────────────────────
 
@@ -912,142 +895,6 @@ function initHUD() {
   });
   initThemePicker();
   initPomodoro();
-}
-
-// ─── Pomodoro Timer (Phase 10 Item 5) ────────────────────────────────────────
-
-const POMODORO_WORK_SECS  = 25 * 60;   // 25 minutes
-const POMODORO_BREAK_SECS = 5  * 60;   // 5-minute break
-
-let _pomo = {
-  state:     'idle',   // 'idle' | 'work' | 'break'
-  remaining: 0,        // seconds left
-  _interval: null,
-};
-
-function initPomodoro() {
-  // Sync total count badge
-  _syncPomodoroCount();
-
-  const btn = document.getElementById('hud-pomodoro-btn');
-  if (!btn) return;
-  btn.addEventListener('click', _togglePomodoro);
-}
-
-function _syncPomodoroCount() {
-  const el = document.getElementById('hud-pomodoro-total');
-  if (el) el.textContent = store.pomodoroCount;
-}
-
-function _togglePomodoro() {
-  if (_pomo.state === 'idle') {
-    _startPomodoroWork();
-  } else {
-    _stopPomodoro(true); // user-cancelled
-  }
-}
-
-function _startPomodoroWork() {
-  _pomo.state     = 'work';
-  _pomo.remaining = POMODORO_WORK_SECS;
-  _pomo._interval = setInterval(_pomodoroTick, 1000);
-  _renderPomodoroHUD();
-}
-
-function _startPomodoroBreak() {
-  _pomo.state     = 'break';
-  _pomo.remaining = POMODORO_BREAK_SECS;
-  _pomo._interval = setInterval(_pomodoroTick, 1000);
-  _renderPomodoroHUD();
-}
-
-function _stopPomodoro(cancelled = false) {
-  clearInterval(_pomo._interval);
-  _pomo._interval = null;
-  _pomo.state     = 'idle';
-  _pomo.remaining = 0;
-  _renderPomodoroHUD();
-  if (!cancelled) return;
-  // Cancelled mid-session — toast
-  const btn = document.getElementById('hud-pomodoro-btn');
-  if (btn) btn.title = 'Start a 25-minute Pomodoro focus session';
-}
-
-function _pomodoroTick() {
-  _pomo.remaining--;
-  _renderPomodoroHUD();
-
-  if (_pomo.remaining > 0) return;
-
-  // Timer expired
-  clearInterval(_pomo._interval);
-  _pomo._interval = null;
-
-  if (_pomo.state === 'work') {
-    // Work block done — record, notify, start break
-    store.recordPomodoro();
-    store.addStudyTime(25);  // credit 25 min to study timer
-    _syncPomodoroCount();
-    _pomodoroToast(
-      `&#127813; Pomodoro #${store.pomodoroCount} complete! +25 min study time. Take a 5-minute break.`,
-      'green'
-    );
-    _startPomodoroBreak();
-  } else {
-    // Break done — return to idle, prompt to start another
-    _pomo.state = 'idle';
-    _renderPomodoroHUD();
-    _pomodoroToast('&#9749; Break over! Click &#127813; to start your next Pomodoro.', 'blue');
-  }
-}
-
-function _renderPomodoroHUD() {
-  const btn   = document.getElementById('hud-pomodoro-btn');
-  const label = document.getElementById('hud-pomodoro-label');
-  if (!btn || !label) return;
-
-  if (_pomo.state === 'idle') {
-    label.textContent = 'Pomodoro';
-    btn.className = 'flex items-center gap-1 text-red-400 hover:text-red-300 transition-colors cursor-pointer select-none';
-    btn.title = 'Start a 25-minute Pomodoro focus session';
-    return;
-  }
-
-  const mins = String(Math.floor(_pomo.remaining / 60)).padStart(2, '0');
-  const secs = String(_pomo.remaining % 60).padStart(2, '0');
-  const display = `${mins}:${secs}`;
-
-  if (_pomo.state === 'work') {
-    label.textContent = `${display} — click to cancel`;
-    btn.className = 'flex items-center gap-1 text-red-400 font-mono font-bold cursor-pointer select-none animate-pulse';
-    btn.title = `Focus session: ${display} remaining. Click to cancel.`;
-  } else {
-    label.textContent = `\u2615 ${display} break`;
-    btn.className = 'flex items-center gap-1 text-blue-400 font-mono cursor-pointer select-none';
-    btn.title = `Break: ${display} remaining. Click to skip.`;
-  }
-}
-
-function showToast(msg, duration = 3000) {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-  const div = document.createElement('div');
-  div.className = 'bg-gray-800 border border-gray-600 text-gray-200 rounded px-3 py-2 text-xs max-w-xs shadow-lg';
-  div.textContent = msg;
-  container.appendChild(div);
-  setTimeout(() => div.remove(), duration);
-}
-
-function _pomodoroToast(msg, colour = 'green') {
-  const colourMap = { green: 'bg-green-900 border-green-600 text-green-200', blue: 'bg-blue-900 border-blue-600 text-blue-200' };
-  const cls = colourMap[colour] || colourMap.green;
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-  const div = document.createElement('div');
-  div.className = `${cls} border rounded px-3 py-2 text-xs max-w-xs shadow-lg`;
-  div.innerHTML = msg;
-  container.appendChild(div);
-  setTimeout(() => div.remove(), 6000);
 }
 
 // ─── Theming ──────────────────────────────────────────────────────────────────
@@ -5155,6 +5002,14 @@ function renderReference() {
       </div>`
     },
     {
+      id: 'udp', title: 'UDP vs TCP Comparison', diagramId: 'udp',
+      content: `<p class="text-xs text-gray-500 mb-2">UDP (User Datagram Protocol) is a connectionless, "best-effort" transport protocol used where speed is more important than reliability.</p>`
+    },
+    {
+      id: 'ftp', title: 'FTP / SFTP / TFTP', diagramId: 'ftp',
+      content: `<p class="text-xs text-gray-500 mb-2">Comparison of file transfer protocols: FTP (TCP 20/21), SFTP (TCP 22), and TFTP (UDP 69).</p>`
+    },
+    {
       id: 'routing', title: 'Routing Protocol Comparison', diagramId: 'routing',
       content: T(
         ['Protocol','Type','Admin Distance','Algorithm','Metric','Timers'],
@@ -6107,6 +5962,8 @@ window.switchView = switchView;
 const DIAGRAM_MODULES = {
   osi:        './js/diagrams/osi.js',
   tcp:        './js/diagrams/tcp.js',
+  udp:        './js/diagrams/udp.js',
+  ftp:        './js/diagrams/ftp.js',
   stp:        './js/diagrams/stp.js',
   ospf:       './js/diagrams/ospf.js',
   ethernet:   './js/diagrams/ethernet.js',

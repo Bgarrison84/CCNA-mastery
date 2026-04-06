@@ -2,27 +2,31 @@
  * HUD.js — Heads-Up Display
  * Subscribes to Store events and updates all XP/Level/Inventory UI elements.
  * Renders toast notifications for XP gain, level up, achievements.
+ * Handles the Pomodoro focus timer.
  */
 import { bus } from '../core/EventBus.js';
+
+const POMODORO_WORK_SECS  = 25 * 60;   // 25 minutes
+const POMODORO_BREAK_SECS = 5  * 60;   // 5-minute break
 
 export class HUD {
   /**
    * @param {object} store   - Store instance
    * @param {object} els     - DOM element references
-   * @param {HTMLElement} els.levelBadge
-   * @param {HTMLElement} els.xpBar
-   * @param {HTMLElement} els.xpText
-   * @param {HTMLElement} els.playerName
-   * @param {HTMLElement} els.hintCount
-   * @param {HTMLElement} els.inventoryList
-   * @param {HTMLElement} els.toastContainer
-   * @param {HTMLElement} els.weekBadge
    */
   constructor(store, els) {
     this.store = store;
     this.els   = els;
+    
+    this._pomo = {
+      state:     'idle',   // 'idle' | 'work' | 'break'
+      remaining: 0,        // seconds left
+      _interval: null,
+    };
+
     this._bind();
     this.refresh(store.state);
+    this._initPomodoro();
   }
 
   _bind() {
@@ -77,6 +81,9 @@ export class HUD {
 
     // Inventory
     if (this.els.inventoryList) this._renderInventory(state.inventory);
+    
+    // Pomodoro total
+    this._syncPomodoroCount();
   }
 
   _renderInventory(inventory) {
@@ -120,6 +127,111 @@ export class HUD {
     if (this.els.hintCount) this.els.hintCount.textContent = hintsRemaining;
   }
 
+  // ─── Pomodoro ──────────────────────────────────────────────────────────────
+
+  _initPomodoro() {
+    this._syncPomodoroCount();
+    const btn = document.getElementById('hud-pomodoro-btn');
+    if (!btn) return;
+    btn.addEventListener('click', () => this._togglePomodoro());
+  }
+
+  _syncPomodoroCount() {
+    const el = document.getElementById('hud-pomodoro-total');
+    if (el) el.textContent = this.store.pomodoroCount;
+  }
+
+  _togglePomodoro() {
+    if (this._pomo.state === 'idle') {
+      this._startPomodoroWork();
+    } else {
+      this._stopPomodoro(true);
+    }
+  }
+
+  _startPomodoroWork() {
+    this._pomo.state     = 'work';
+    this._pomo.remaining = POMODORO_WORK_SECS;
+    this._pomo._interval = setInterval(() => this._pomodoroTick(), 1000);
+    this._renderPomodoroHUD();
+  }
+
+  _startPomodoroBreak() {
+    this._pomo.state     = 'break';
+    this._pomo.remaining = POMODORO_BREAK_SECS;
+    this._pomo._interval = setInterval(() => this._pomodoroTick(), 1000);
+    this._renderPomodoroHUD();
+  }
+
+  _stopPomodoro(cancelled = false) {
+    clearInterval(this._pomo._interval);
+    this._pomo._interval = null;
+    this._pomo.state     = 'idle';
+    this._pomo.remaining = 0;
+    this._renderPomodoroHUD();
+    if (!cancelled) return;
+    const btn = document.getElementById('hud-pomodoro-btn');
+    if (btn) btn.title = 'Start a 25-minute Pomodoro focus session';
+  }
+
+  _pomodoroTick() {
+    this._pomo.remaining--;
+    this._renderPomodoroHUD();
+
+    if (this._pomo.remaining > 0) return;
+
+    clearInterval(this._pomo._interval);
+    this._pomo._interval = null;
+
+    if (this._pomo.state === 'work') {
+      this.store.recordPomodoro();
+      this.store.addStudyTime(25);
+      this._syncPomodoroCount();
+      this._pomodoroToast(
+        `&#127813; Pomodoro #${this.store.pomodoroCount} complete! +25 min study time. Take a 5-minute break.`,
+        'green'
+      );
+      this._startPomodoroBreak();
+    } else {
+      this._pomo.state = 'idle';
+      this._renderPomodoroHUD();
+      this._pomodoroToast('&#9749; Break over! Click &#127813; to start your next Pomodoro.', 'blue');
+    }
+  }
+
+  _renderPomodoroHUD() {
+    const btn   = document.getElementById('hud-pomodoro-btn');
+    const label = document.getElementById('hud-pomodoro-label');
+    if (!btn || !label) return;
+
+    if (this._pomo.state === 'idle') {
+      label.textContent = 'Pomodoro';
+      btn.className = 'flex items-center gap-1 text-red-400 hover:text-red-300 transition-colors cursor-pointer select-none';
+      btn.title = 'Start a 25-minute Pomodoro focus session';
+      return;
+    }
+
+    const mins = String(Math.floor(this._pomo.remaining / 60)).padStart(2, '0');
+    const secs = String(this._pomo.remaining % 60).padStart(2, '0');
+    const display = `${mins}:${secs}`;
+
+    if (this._pomo.state === 'work') {
+      label.textContent = `${display} — click to cancel`;
+      btn.className = 'flex items-center gap-1 text-red-400 font-mono font-bold cursor-pointer select-none animate-pulse';
+      btn.title = `Focus session: ${display} remaining. Click to cancel.`;
+    } else {
+      label.textContent = `\u2615 ${display} break`;
+      btn.className = 'flex items-center gap-1 text-blue-400 font-mono cursor-pointer select-none';
+      btn.title = `Break: ${display} remaining. Click to skip.`;
+    }
+  }
+
+  _pomodoroToast(msg, colour = 'green') {
+    const colourMap = { green: 'bg-green-900 border-green-600 text-green-200', blue: 'bg-blue-900 border-blue-600 text-blue-200' };
+    const cls = colourMap[colour] || colourMap.green;
+    this._toast(msg, cls, 5000);
+  }
+
   // ─── Toast Notifications ───────────────────────────────────────────────────
 
   _toastXP({ amount, source }) {
@@ -132,10 +244,9 @@ export class HUD {
       'bg-yellow-900 border-yellow-400 text-yellow-200 text-lg font-bold',
       3000
     );
-    // Glow pulse on the XP bar
     if (this.els.xpBar) {
       this.els.xpBar.classList.remove('xp-level-pulse');
-      void this.els.xpBar.offsetWidth; // reflow to restart
+      void this.els.xpBar.offsetWidth; 
       this.els.xpBar.classList.add('xp-level-pulse');
       this.els.xpBar.addEventListener('animationend', () => {
         this.els.xpBar.classList.remove('xp-level-pulse');
@@ -161,7 +272,7 @@ export class HUD {
   }
 
   _toastStreak({ current, extended }) {
-    if (!extended) return; // don't toast on first login of same day
+    if (!extended) return; 
     const msg = current >= 7
       ? `\u{1F525} ${current}-Day Streak! 1.5x XP active!`
       : current >= 3
@@ -177,20 +288,21 @@ export class HUD {
    * @param {number} duration - ms
    */
   _toast(message, classes, duration = 2000) {
-    const container = this.els.toastContainer;
+    const container = this.els.toastContainer || document.getElementById('toast-container');
     if (!container) return;
 
     const el = document.createElement('div');
     el.className = `px-4 py-2 border rounded shadow-lg text-sm transition-all duration-300 opacity-0 translate-y-2 ${classes}`;
-    el.textContent = message;
+    // Handle HTML if it starts with an entity (like the pomodoro emoji)
+    if (message.includes('&') || message.includes('<')) el.innerHTML = message;
+    else el.textContent = message;
+    
     container.appendChild(el);
 
-    // Animate in
     requestAnimationFrame(() => {
       el.classList.remove('opacity-0', 'translate-y-2');
     });
 
-    // Animate out then remove
     setTimeout(() => {
       el.classList.add('opacity-0', 'translate-y-2');
       el.addEventListener('transitionend', () => el.remove(), { once: true });

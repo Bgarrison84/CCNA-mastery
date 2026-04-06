@@ -83,7 +83,12 @@ export function render(containerEl) {
         <button class="osi-tab" data-tab="trouble" style="
           padding:6px 16px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;
           background:transparent;border:1px solid rgba(0,255,65,0.15);color:#6a9a6a;">
-          Troubleshooting Approach
+          Troubleshooting
+        </button>
+        <button class="osi-tab" data-tab="challenge" style="
+          padding:6px 16px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;
+          background:transparent;border:1px solid rgba(0,255,65,0.15);color:#6a9a6a;">
+          Challenge Mode
         </button>
       </div>
 
@@ -97,7 +102,7 @@ export function render(containerEl) {
             border:1px solid rgba(255,255,255,0.06);cursor:pointer;
           ">
             <div class="osi-header" style="
-              display:flex;align-items:center;gap:10px;padding:8px 12px;
+              display:flex;align-items:center;gap:10px;padding:12px;
               background:rgba(255,255,255,0.03);
               transition:background 0.15s;
             ">
@@ -181,6 +186,41 @@ export function render(containerEl) {
             <p style="color:#6b7280;font-size:0.68rem;font-style:italic;">${a.use}</p>
           </div>`).join('')}
       </div>
+
+      <div id="osi-pane-challenge" class="hidden">
+        <p style="color:#6a9a6a;margin-bottom:12px;font-size:0.72rem;">
+          Drag the layers from the pool into the correct order (Layer 7 at the top, Layer 1 at the bottom).
+        </p>
+        
+        <div style="display:flex;gap:20px;flex-wrap:wrap;">
+          <!-- Drop Slots -->
+          <div id="osi-slots" style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:4px;">
+            ${[7,6,5,4,3,2,1].map(n => `
+              <div class="osi-slot" data-num="${n}" style="
+                height:38px;border:1px dashed rgba(0,255,65,0.2);border-radius:4px;
+                display:flex;align-items:center;padding:0 12px;position:relative;
+                background:rgba(0,0,0,0.2);
+              ">
+                <span style="color:#2a4a2a;font-size:0.65rem;font-weight:700;width:24px;">L${n}</span>
+                <div class="slot-content" style="flex:1;height:100%;"></div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Drag Pool -->
+          <div style="flex:1;min-width:200px;">
+            <div id="osi-pool" style="display:flex;flex-direction:column;gap:4px;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid rgba(255,255,255,0.05);">
+              <!-- Tiles injected by JS -->
+            </div>
+            <button id="osi-check-btn" style="
+              margin-top:16px;width:100%;padding:10px;border-radius:4px;
+              background:#00ff41;color:#000;font-weight:700;font-size:0.75rem;
+              cursor:pointer;border:none;transition:transform 0.1s;
+            ">Validate Order</button>
+            <div id="osi-challenge-feedback" class="hidden" style="margin-top:12px;font-size:0.72rem;text-align:center;"></div>
+          </div>
+        </div>
+      </div>
     </div>`;
 
   // Tab switching
@@ -194,11 +234,110 @@ export function render(containerEl) {
       btn.style.background = 'rgba(0,255,65,0.15)';
       btn.style.borderColor = 'rgba(0,255,65,0.4)';
       btn.style.color = '#00ff41';
-      ['osi','tcpip','trouble'].forEach(t => {
+      ['osi','tcpip','trouble','challenge'].forEach(t => {
         containerEl.querySelector(`#osi-pane-${t}`)?.classList.toggle('hidden', t !== btn.dataset.tab);
       });
+      if (btn.dataset.tab === 'challenge') initChallenge();
     });
   });
+
+  function initChallenge() {
+    const pool  = containerEl.querySelector('#osi-pool');
+    const slots = containerEl.querySelectorAll('.osi-slot');
+    const checkBtn = containerEl.querySelector('#osi-check-btn');
+    const feedback = containerEl.querySelector('#osi-challenge-feedback');
+
+    // Reset
+    pool.innerHTML = '';
+    slots.forEach(s => s.querySelector('.slot-content').innerHTML = '');
+    feedback.classList.add('hidden');
+
+    const shuffled = [...LAYERS].sort(() => Math.random() - 0.5);
+    shuffled.forEach(l => {
+      const tile = document.createElement('div');
+      tile.className = 'osi-tile';
+      tile.dataset.num = l.num;
+      tile.style = `
+        padding:8px 12px;border-radius:4px;background:#1a1a1a;
+        border:1px solid ${l.color}44;color:${l.color};font-size:0.75rem;
+        cursor:grab;user-select:none;touch-action:none;font-weight:600;
+      `;
+      tile.textContent = l.name;
+      pool.appendChild(tile);
+
+      // Drag logic
+      let isDragging = false;
+      let startX, startY;
+      let originalParent = pool;
+
+      tile.addEventListener('pointerdown', e => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        tile.setPointerCapture(e.pointerId);
+        tile.style.zIndex = 1000;
+        tile.style.cursor = 'grabbing';
+      });
+
+      tile.addEventListener('pointermove', e => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        tile.style.transform = `translate(${dx}px, ${dy}px)`;
+      });
+
+      tile.addEventListener('pointerup', e => {
+        if (!isDragging) return;
+        isDragging = false;
+        tile.releasePointerCapture(e.pointerId);
+        tile.style.zIndex = '';
+        tile.style.cursor = 'grab';
+        tile.style.transform = '';
+
+        // Check drop
+        const rect = tile.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        let dropped = false;
+        slots.forEach(slot => {
+          const sRect = slot.getBoundingClientRect();
+          if (centerX >= sRect.left && centerX <= sRect.right &&
+              centerY >= sRect.top && centerY <= sRect.bottom) {
+            const content = slot.querySelector('.slot-content');
+            if (!content.hasChildNodes()) {
+              content.appendChild(tile);
+              dropped = true;
+            }
+          }
+        });
+
+        if (!dropped) pool.appendChild(tile);
+      });
+    });
+
+    checkBtn.onclick = () => {
+      let correct = 0;
+      slots.forEach(slot => {
+        const tile = slot.querySelector('.osi-tile');
+        if (tile && tile.dataset.num == slot.dataset.num) {
+          correct++;
+          slot.style.borderColor = 'rgba(0,255,65,0.6)';
+        } else {
+          slot.style.borderColor = 'rgba(255,65,65,0.6)';
+        }
+      });
+
+      feedback.classList.remove('hidden');
+      if (correct === 7) {
+        feedback.innerHTML = '<span style="color:#00ff41;font-weight:700;">✅ Perfect! All layers in order. +50 XP</span>';
+        // Dispatch XP event for main store
+        document.dispatchEvent(new CustomEvent('ccna-xp', { detail: { amount: 50, reason: 'OSI Challenge' } }));
+      } else {
+        feedback.innerHTML = `<span style="color:#ffb000;">${correct}/7 correct. Keep trying!</span>`;
+      }
+    };
+  }
 
   // Layer expand/collapse
   containerEl.querySelectorAll('.osi-row').forEach(row => {
