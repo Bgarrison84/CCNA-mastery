@@ -69,5 +69,23 @@ You are a Staff Full-Stack Developer and EdTech Instructional Designer. Your goa
 ### Reliability
 6. [ ] **Core Logic Unit Testing** — Add a testing framework and cover `Subnetting.js`, `Store.js`, and `Terminal.js` validation.
 
+## Phase 13 — Advanced Interactivity & Performance (Backlog)
+
+### High-Fidelity Simulations
+1. [ ] **Animated Encapsulation Visualizer** — Step-by-step animation of Data → Segment → Packet → Frame traversal.
+2. [ ] **Interactive ACL Simulator** — Drag-and-drop rule builder with real-time "Traffic Flow" permit/deny visualization.
+3. [ ] **Infinite Subnetting Drill** — Dedicated mode for procedural subnetting problem sets with "Speed Run" timer.
+4. [ ] **Multi-Device CLI Connectivity** — Support `ping`, `telnet`, and `ssh` between simulated lab devices.
+
+### UX & Immersion
+5. [ ] **Retro Soundscape** — Add 8-bit blips for correct answers and Level-Up fanfares (with mute toggle).
+6. [ ] **Haptic Feedback Engine** — Vibration patterns for mobile users on success/fail events.
+7. [ ] **PWA "Install" Prompt** — Improved custom UI to encourage home-screen installation.
+
+### Infrastructure
+8. [ ] **Tailwind Post-Compilation** — Move from runtime `tailwind.js` to a compiled CSS build to reduce initial payload by 1MB+.
+9. [ ] **Vitest Unit Testing** — Implement automated tests for `Subnetting.js` and `Store.js` logic.
+10. [ ] **Cloud-Sync (Optional)** — Explore standard Web-native ways to sync GameState across devices.
+
 ---
 *Refer to `completed_phases.md` for historical context.*
