@@ -57,37 +57,51 @@ window.renderDiagram = async function(id, container) {
 // ─── Core Init ───────────────────────────────────────────────────────────────
 
 async function init() {
-  await store.ready;
+  try {
+    await store.ready;
 
-  const firstWeek = Math.min(Math.max(store.state.currentWeek || 1, 1), 6);
-  
-  // Loading first week data (simple loader for now)
-  const meta = await fetch('./data/meta.json').then(r => r.json());
-  const weekData = await fetch(`./data/week${firstWeek}.json`).then(r => r.json());
+    const firstWeek = Math.min(Math.max(store.state.currentWeek || 1, 1), 6);
+    
+    // Loading bootstrap data
+    const [meta, weekData] = await Promise.all([
+      fetch('./data/meta.json').then(r => { if(!r.ok) throw new Error('Meta fail'); return r.json(); }),
+      fetch(`./data/week${firstWeek}.json`).then(r => { if(!r.ok) throw new Error('Week fail'); return r.json(); })
+    ]);
 
-  const content = {
-    labs:        meta.labs        || [],
-    bossBattles: meta.bossBattles || [],
-    storyBeats:  meta.storyBeats  || [],
-    questions:   weekData.questions || [],
-  };
+    content = {
+      labs:        meta.labs        || [],
+      bossBattles: meta.bossBattles || [],
+      storyBeats:  meta.storyBeats  || [],
+      questions:   weekData.questions || [],
+    };
 
-  // Init UI Components
-  new HUD(store, {
-    levelBadge:      document.getElementById('hud-level'),
-    xpBar:           document.getElementById('hud-xp-bar'),
-    xpText:          document.getElementById('hud-xp-text'),
-    playerName:      document.getElementById('hud-player-name'),
-    hintCount:       document.getElementById('hud-hints'),
-    inventoryList:   document.getElementById('inventory-list'),
-    toastContainer:  document.getElementById('toast-container'),
-    weekBadge:       document.getElementById('hud-week'),
-  });
+    // Init UI Components
+    new HUD(store, {
+      levelBadge:      document.getElementById('hud-level'),
+      xpBar:           document.getElementById('hud-xp-bar'),
+      xpText:          document.getElementById('hud-xp-text'),
+      playerName:      document.getElementById('hud-player-name'),
+      hintCount:       document.getElementById('hud-hints'),
+      inventoryList:   document.getElementById('inventory-list'),
+      toastContainer:  document.getElementById('toast-container'),
+      weekBadge:       document.getElementById('hud-week'),
+    });
 
-  router = new Router(content, store, document.getElementById('app-view'));
-  router.switchView('story');
+    router = new Router(content, store, document.getElementById('app-view'));
+    router.switchView('story');
 
-  document.body.classList.remove('loading');
+    document.body.classList.remove('loading');
+  } catch (err) {
+    console.error('[init] Critical failure:', err);
+    document.body.innerHTML = `
+      <div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#0a0a0a; color:#f87171; font-family:monospace; padding:20px; text-align:center;">
+        <h1 style="font-size:1.5rem; margin-bottom:10px;">⚠️ Boot Error</h1>
+        <p style="font-size:0.8rem; color:#6b7280; max-width:400px; line-height:1.5;">
+          Failed to load critical application data. This might be due to a connection issue or an outdated cache.
+        </p>
+        <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; background:#1f2937; border:1px solid #374151; color:#fff; border-radius:4px; cursor:pointer;">Retry</button>
+      </div>`;
+  }
 }
 
 window._allWeeksLoaded = () => true;

@@ -8,7 +8,7 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v5';
+const CACHE_VERSION = 'ccna-v6';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
@@ -27,8 +27,18 @@ const PRECACHE_URLS = [
   './js/engine/Terminal.js',
   './js/engine/ScriptingEngine.js',
   './js/ui/HUD.js',
+  './js/ui/Router.js',
   './js/ui/StoryMode.js',
-  // Split content files (replaces monolithic content.json)
+  './js/ui/LabView.js',
+  './js/ui/GrindView.js',
+  './js/ui/StatsView.js',
+  './js/ui/ExamView.js',
+  './js/ui/BossView.js',
+  './js/ui/SubnetView.js',
+  './js/ui/ReferenceView.js',
+  './js/ui/FlashView.js',
+  './js/utils/ui.js',
+  // Split content files
   './data/meta.json',
   './data/week1.json',
   './data/week2.json',
@@ -39,9 +49,11 @@ const PRECACHE_URLS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
-  // Diagram modules (all of them)
+  // Diagram modules
   './js/diagrams/osi.js',
   './js/diagrams/tcp.js',
+  './js/diagrams/udp.js',
+  './js/diagrams/ftp.js',
   './js/diagrams/stp.js',
   './js/diagrams/ospf.js',
   './js/diagrams/ethernet.js',
