@@ -56,11 +56,49 @@ const EXAMPLES = [
   { ip: '192.168.1.128', prefix: 30, label: '/30 (point-to-point)' },
 ];
 
+// ── Speed Drill state ───────────────────────────────────────────────────────
+
+const DRILL_DURATION = 90; // seconds per speed run
+
+function genDrillQ() {
+  const prefixRange = [[24,30],[16,24],[8,16]];
+  const tier = prefixRange[Math.floor(Math.random() * prefixRange.length)];
+  const pref = tier[0] + Math.floor(Math.random() * (tier[1] - tier[0] + 1));
+  const first = [10,172,192][Math.floor(Math.random()*3)];
+  const ip = `${first}.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`;
+  const sub = calcSubnet(ip, pref);
+  // Pick a random question type
+  const types = ['net','bcast','first','last','hosts','mask'];
+  const qType = types[Math.floor(Math.random() * types.length)];
+  const answers = {
+    net:   { label: 'Network ID',       answer: sub.net,              hint: 'AND the IP with the mask' },
+    bcast: { label: 'Broadcast',        answer: sub.bcast,            hint: 'OR the network with the wildcard' },
+    first: { label: 'First Usable IP',  answer: sub.first,            hint: 'Network ID + 1' },
+    last:  { label: 'Last Usable IP',   answer: sub.last,             hint: 'Broadcast - 1' },
+    hosts: { label: 'Usable Hosts',     answer: sub.hosts.toString(), hint: '2^(32-prefix) - 2' },
+    mask:  { label: 'Subnet Mask',      answer: sub.mask,             hint: `/${pref} → mask bits` },
+  };
+  return { ipStr: ip, prefix: pref, sub, qType, ...answers[qType] };
+}
+
+// ── Main render ──────────────────────────────────────────────────────────────
+
 export function render(containerEl) {
   let inputIp = '192.168.1.0';
   let inputPrefix = 24;
   let error = '';
-  let mode = 'view'; // 'view' | 'game'
+  let mode = 'view'; // 'view' | 'game' | 'drill'
+
+  // Drill state
+  let drillActive   = false;
+  let drillTimer    = null;
+  let drillRemain   = DRILL_DURATION;
+  let drillScore    = 0;
+  let drillStreak   = 0;
+  let drillBest     = parseInt(localStorage.getItem('ccna-drill-best') || '0');
+  let drillQ        = null;
+  let drillShownHint = false;
+  let drillLastResult = null; // 'correct'|'wrong'|null
 
   function parseInput(val) {
     const m = val.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s*\/\s*(\d{1,2})$/);
@@ -76,12 +114,15 @@ export function render(containerEl) {
     containerEl.innerHTML = `
       <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:#c8ffc8;">
         <!-- Tab Switcher -->
-        <div style="display:flex;gap:8px;margin-bottom:16px;">
-          <button class="sn-mode-btn" data-mode="view" style="padding:6px 12px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;background:${mode==='view'?'rgba(0,255,65,0.15)':'transparent'};border:1px solid ${mode==='view'?'rgba(0,255,65,0.4)':'rgba(0,255,65,0.15)'};color:${mode==='view'?'#00ff41':'#6a9a6a'};">Explorer</button>
-          <button class="sn-mode-btn" data-mode="game" style="padding:6px 12px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;background:${mode==='game'?'rgba(0,255,65,0.15)':'transparent'};border:1px solid ${mode==='game'?'rgba(0,255,65,0.4)':'rgba(0,255,65,0.15)'};color:${mode==='game'?'#00ff41':'#6a9a6a'};">ID the Subnet</button>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          ${[['view','Explorer'],['game','ID the Subnet'],['drill','⚡ Speed Drill']].map(([m,label])=>`
+            <button class="sn-mode-btn" data-mode="${m}" style="padding:6px 12px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;
+              background:${mode===m?'rgba(0,255,65,0.15)':'transparent'};
+              border:1px solid ${mode===m?'rgba(0,255,65,0.4)':'rgba(0,255,65,0.15)'};
+              color:${mode===m?'#00ff41':'#6a9a6a'};">${label}</button>`).join('')}
         </div>
 
-        ${mode === 'view' ? renderExplorer() : renderGame()}
+        ${mode === 'view' ? renderExplorer() : mode === 'game' ? renderGame() : renderDrill()}
       </div>`;
 
     bindEvents();
@@ -234,10 +275,195 @@ export function render(containerEl) {
       </div>`;
   }
 
+  // ── Speed Drill renderer ──────────────────────────────────────────────────
+
+  function renderDrill() {
+    const timerColor = drillRemain <= 15 ? '#f87171' : drillRemain <= 30 ? '#fbbf24' : '#4ade80';
+    const mm = String(Math.floor(drillRemain / 60)).padStart(2,'0');
+    const ss = String(drillRemain % 60).padStart(2,'0');
+
+    if (!drillActive && !drillScore) {
+      // Pre-start screen
+      return `
+        <div style="text-align:center;padding:20px;">
+          <div style="font-size:2rem;margin-bottom:8px;">⚡</div>
+          <div style="font-size:1rem;font-weight:700;color:#00ff41;margin-bottom:6px;">Speed Drill</div>
+          <p style="color:#6b7280;font-size:0.72rem;margin-bottom:16px;line-height:1.6;">
+            ${DRILL_DURATION}-second timer. Answer as many subnetting questions as you can.<br>
+            Type the answer and press <strong style="color:#9ca3af;">Enter</strong>.<br>
+            Questions range from /8 to /30 — network, broadcast, hosts, mask, and more.
+          </p>
+          <div style="font-size:0.7rem;color:#4b5563;margin-bottom:20px;">
+            Personal best: <span style="color:#fbbf24;font-weight:700;">${drillBest} correct</span>
+          </div>
+          <button id="sn-drill-start" style="padding:10px 32px;background:#00ff41;border:none;border-radius:4px;
+            font-weight:700;font-size:0.85rem;cursor:pointer;color:#000;font-family:monospace;">
+            Start Drill
+          </button>
+        </div>`;
+    }
+
+    if (!drillActive && drillScore > 0) {
+      // Results screen
+      const newBest = drillScore > drillBest;
+      const xp = drillScore * 8;
+      return `
+        <div style="text-align:center;padding:20px;">
+          <div style="font-size:1.5rem;margin-bottom:6px;">${newBest ? '🏆' : '✓'}</div>
+          <div style="font-size:1rem;font-weight:700;color:${newBest?'#fbbf24':'#4ade80'};margin-bottom:4px;">
+            ${newBest ? 'New Personal Best!' : 'Drill Complete'}
+          </div>
+          <div style="font-size:2rem;font-weight:800;color:#00ff41;margin:12px 0;">${drillScore}</div>
+          <div style="font-size:0.75rem;color:#6b7280;margin-bottom:4px;">correct answers in ${DRILL_DURATION}s</div>
+          ${newBest ? `<div style="font-size:0.7rem;color:#fbbf24;margin-bottom:16px;">Previous best: ${drillBest > drillScore ? drillBest : drillScore - 1}</div>` : `<div style="font-size:0.7rem;color:#4b5563;margin-bottom:16px;">Personal best: ${drillBest}</div>`}
+          <div style="font-size:0.72rem;color:#4ade80;margin-bottom:16px;">+${xp} XP earned</div>
+          <div style="display:flex;gap:8px;justify-content:center;">
+            <button id="sn-drill-again" style="padding:8px 24px;background:#00ff41;border:none;border-radius:4px;font-weight:700;font-size:0.78rem;cursor:pointer;color:#000;font-family:monospace;">
+              Play Again
+            </button>
+            <button id="sn-drill-back" class="sn-mode-btn" data-mode="view" style="padding:8px 16px;background:transparent;border:1px solid #374151;border-radius:4px;font-size:0.72rem;cursor:pointer;color:#6b7280;font-family:monospace;">
+              Explorer
+            </button>
+          </div>
+        </div>`;
+    }
+
+    // Active drill
+    const q = drillQ;
+    const resultBanner = drillLastResult === 'correct'
+      ? `<div style="color:#4ade80;font-weight:700;font-size:0.72rem;text-align:center;margin-bottom:6px;">✓ Correct! +1</div>`
+      : drillLastResult === 'wrong'
+      ? `<div style="color:#f87171;font-weight:700;font-size:0.72rem;text-align:center;margin-bottom:6px;">✗ Wrong — answer was <span style="color:#fbbf24;">${q?.prevAnswer || ''}</span></div>`
+      : '';
+
+    return `
+      <div>
+        <!-- HUD -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="font-size:1.4rem;font-weight:800;color:${timerColor};font-variant-numeric:tabular-nums;min-width:50px;">${mm}:${ss}</div>
+          <div style="flex:1;height:6px;background:#1f2937;border-radius:3px;overflow:hidden;">
+            <div style="height:100%;background:${timerColor};border-radius:3px;transition:width .9s linear;width:${(drillRemain/DRILL_DURATION)*100}%;"></div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:1.1rem;font-weight:800;color:#00ff41;">${drillScore}</div>
+            <div style="font-size:0.6rem;color:#4b5563;">correct</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:0.9rem;font-weight:700;color:#fbbf24;">${drillStreak}</div>
+            <div style="font-size:0.6rem;color:#4b5563;">streak</div>
+          </div>
+        </div>
+
+        ${resultBanner}
+
+        <!-- Question -->
+        <div style="background:#0f1117;border:1px solid #1f2937;border-radius:6px;padding:16px;margin-bottom:12px;text-align:center;">
+          <div style="font-size:0.65rem;color:#4b5563;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">${q?.label || ''}</div>
+          <div style="font-size:1.5rem;font-weight:800;color:#00ff41;margin-bottom:4px;">${q?.ipStr || ''}/${q?.prefix || ''}</div>
+          <div style="font-size:0.68rem;color:#374151;">${drillShownHint ? `Hint: ${q?.hint}` : ''}</div>
+        </div>
+
+        <!-- Answer input -->
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <input id="sn-drill-input" type="text" placeholder="Type answer, press Enter…" autocomplete="off" style="
+            flex:1;padding:8px 12px;background:#0d0d0d;border:1px solid rgba(0,255,65,0.3);border-radius:4px;
+            color:#00ff41;font-family:monospace;font-size:0.82rem;outline:none;">
+          <button id="sn-drill-submit" style="padding:8px 16px;background:rgba(0,255,65,0.15);border:1px solid rgba(0,255,65,0.4);border-radius:4px;color:#00ff41;font-family:monospace;font-size:0.72rem;cursor:pointer;">Enter</button>
+          <button id="sn-drill-hint" style="padding:8px 10px;background:transparent;border:1px solid #374151;border-radius:4px;color:#6b7280;font-family:monospace;font-size:0.68rem;cursor:pointer;" title="Show hint (no penalty)">?</button>
+          <button id="sn-drill-skip" style="padding:8px 10px;background:transparent;border:1px solid #374151;border-radius:4px;color:#6b7280;font-family:monospace;font-size:0.68rem;cursor:pointer;" title="Skip (counts as wrong)">↷</button>
+        </div>
+
+        <div style="font-size:0.62rem;color:#374151;text-align:center;">
+          Press <kbd style="background:#1f2937;border:1px solid #374151;border-radius:2px;padding:1px 4px;color:#6b7280;">Enter</kbd> to submit ·
+          <kbd style="background:#1f2937;border:1px solid #374151;border-radius:2px;padding:1px 4px;color:#6b7280;">?</kbd> hint ·
+          <kbd style="background:#1f2937;border:1px solid #374151;border-radius:2px;padding:1px 4px;color:#6b7280;">↷</kbd> skip
+        </div>
+      </div>`;
+  }
+
+  function startDrill() {
+    drillActive  = true;
+    drillScore   = 0;
+    drillStreak  = 0;
+    drillRemain  = DRILL_DURATION;
+    drillLastResult = null;
+    drillQ       = genDrillQ();
+    clearInterval(drillTimer);
+    drillTimer   = setInterval(() => {
+      drillRemain--;
+      if (drillRemain <= 0) {
+        clearInterval(drillTimer);
+        drillActive = false;
+        if (drillScore > drillBest) {
+          drillBest = drillScore;
+          localStorage.setItem('ccna-drill-best', drillBest);
+        }
+        const xp = drillScore * 8;
+        if (xp > 0) document.dispatchEvent(new CustomEvent('ccna-xp', { detail: { amount: xp, reason: 'Speed Drill' } }));
+      }
+      draw();
+      if (drillActive) bindDrillEvents();
+    }, 1000);
+    draw();
+    bindDrillEvents();
+  }
+
+  function submitDrillAnswer(userVal) {
+    if (!drillActive || !drillQ) return;
+    const q = drillQ;
+    const norm = v => v.trim().toLowerCase().replace(/\s+/g,'');
+    const correct = norm(userVal) === norm(q.answer);
+    if (correct) {
+      drillScore++;
+      drillStreak++;
+      drillLastResult = 'correct';
+    } else {
+      drillStreak = 0;
+      drillLastResult = 'wrong';
+      q.prevAnswer = q.answer;
+    }
+    drillShownHint = false;
+    drillQ = genDrillQ();
+    draw();
+    bindDrillEvents();
+  }
+
+  function bindDrillEvents() {
+    const input  = containerEl.querySelector('#sn-drill-input');
+    const submit = containerEl.querySelector('#sn-drill-submit');
+    const hint   = containerEl.querySelector('#sn-drill-hint');
+    const skip   = containerEl.querySelector('#sn-drill-skip');
+    if (!input) return;
+    input.focus();
+    submit?.addEventListener('click', () => { submitDrillAnswer(input.value); });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitDrillAnswer(input.value); } });
+    hint?.addEventListener('click', () => { drillShownHint = true; draw(); bindDrillEvents(); });
+    skip?.addEventListener('click', () => {
+      drillStreak = 0;
+      drillLastResult = 'wrong';
+      drillQ.prevAnswer = drillQ.answer;
+      drillShownHint = false;
+      drillQ = genDrillQ();
+      draw(); bindDrillEvents();
+    });
+  }
+
   function bindEvents() {
     containerEl.querySelectorAll('.sn-mode-btn').forEach(btn => {
-      btn.onclick = () => { mode = btn.dataset.mode; draw(); if(mode==='game') initGame(); };
+      btn.onclick = () => {
+        clearInterval(drillTimer); drillActive = false;
+        mode = btn.dataset.mode; draw(); if(mode==='game') initGame();
+      };
     });
+
+    if (mode === 'drill') {
+      containerEl.querySelector('#sn-drill-start')?.addEventListener('click', startDrill);
+      containerEl.querySelector('#sn-drill-again')?.addEventListener('click', () => {
+        drillScore = 0; drillStreak = 0; drillLastResult = null; startDrill();
+      });
+      if (drillActive) bindDrillEvents();
+      return;
+    }
 
     if (mode === 'view') {
       containerEl.querySelector('#sn-calc')?.addEventListener('click', () => {

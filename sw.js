@@ -8,7 +8,7 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v7';
+const CACHE_VERSION = 'ccna-v8';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
@@ -69,6 +69,7 @@ const PRECACHE_URLS = [
   './js/diagrams/snmp.js',
   './js/diagrams/aaa.js',
   './js/diagrams/cloud.js',
+  './js/diagrams/encapsulation.js',
 ];
 
 // Optional assets: cached opportunistically — won't block SW install if missing

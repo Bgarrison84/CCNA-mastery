@@ -23,6 +23,25 @@
 
 ---
 
+## Phase 13 — Advanced Interactivity (2026-04-07)
+Source: GEMINI.md backlog. Work through in order, one per session.
+
+### High-Fidelity Simulations
+1. [x] **Animated Encapsulation Visualizer** — `js/diagrams/encapsulation.js`; 7-step OSI Layer 7→1 PDU build-up with color-coded header blocks; layer selector strip; keyboard nav; wired into `DIAGRAM_MODULES` + `ReferenceView.js` + `sw.js` (ccna-v8). (done 2026-04-07)
+2. [x] **Interactive ACL Simulator** — `js/diagrams/acl.js` rebuilt with two tabs: **Trace** (animated top-down match with IP input) + **Build** (drag-and-drop rule reorder; real-time traffic-flow matrix for 4 test IPs; add/delete/reset rules). (done 2026-04-07)
+3. [x] **Infinite Subnetting Drill / Speed Run** — `js/diagrams/subnetting.js` extended with third tab **⚡ Speed Drill**: 90-second countdown timer, procedural question generation (/8–/30, 6 question types: net/bcast/first/last/hosts/mask), streak counter, personal best in localStorage, XP award (8 XP/correct), hint + skip buttons, free-text input for speed. (done 2026-04-07)
+4. [ ] **Multi-Device CLI Connectivity** — Support `ping`, `telnet`, and `ssh` between simulated lab devices in `Terminal.js`. Requires device-awareness and cross-device reachability checks.
+
+### UX & Immersion
+5. [ ] **Retro Soundscape** — Add 8-bit blips for correct answers and Level-Up fanfares (Web Audio API) with mute toggle.
+6. [ ] **PWA "Install" Prompt** — Improved custom UI to encourage home-screen installation.
+
+### Infrastructure
+7. [ ] **Tailwind Post-Compilation** — Move from runtime `tailwind.js` to a compiled CSS build to reduce initial payload by 1MB+.
+8. [ ] **Vitest Unit Testing** — Implement automated tests for `Subnetting.js` and `Store.js` logic.
+
+---
+
 ## Phase 11 — Polish & Accessibility (planned 2026-04-04)
 Source: Gemini suggestions review (feasible subset). Work through in order, one per session.
 
