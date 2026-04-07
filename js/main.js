@@ -11,6 +11,7 @@ import { Router }      from './ui/Router.js';
 
 const store   = new Store();
 let router    = null;
+let content   = null;
 
 // Award XP from custom events (e.g., from diagrams/models)
 document.addEventListener('ccna-xp', e => {

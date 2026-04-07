@@ -10,6 +10,12 @@ import { ExamView } from './ExamView.js';
 import { BossView } from './BossView.js';
 import { SubnetView } from './SubnetView.js';
 import { ReferenceView } from './ReferenceView.js';
+import { FlashView } from './FlashView.js';
+import { NotebookView } from './NotebookView.js';
+import { InventoryView } from './InventoryView.js';
+import { ProjectsView } from './ProjectsView.js';
+import { MegaLabsView } from './MegaLabsView.js';
+import { ScriptingView } from './ScriptingView.js';
 
 export class Router {
   constructor(content, store, appViewEl) {
@@ -33,6 +39,12 @@ export class Router {
       boss:      BossView,
       subnet:    SubnetView,
       reference: ReferenceView,
+      flash:     FlashView,
+      notebook:  NotebookView,
+      inventory: InventoryView,
+      projects:  ProjectsView,
+      megalabs:  MegaLabsView,
+      scripting: ScriptingView,
     };
 
     bus.on('nav:switch', e => this.switchView(e.view, e));

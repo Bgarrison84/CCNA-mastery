@@ -706,14 +706,24 @@
     story: 'Story Mode', lab: 'The Lab', grind: 'The Grind',
     exam: 'Exam Simulator', stats: 'Stats Dashboard',
     boss: 'Boss Battles', subnet: 'Subnetting Trainer',
+    flash: 'Flashcards',
     notebook: 'Mistake Notebook', inventory: 'Inventory', projects: 'Projects', megalabs: 'Mega Labs', scripting: 'Network Scripting',
   };
-  // Intercept nav clicks to update header label
+  // Intercept nav clicks to update header label and switch view
   document.addEventListener('click', e => {
     const btn = e.target.closest('[data-nav]');
     if (btn) {
+      const viewId = btn.dataset.nav;
       const lbl = document.getElementById('current-view-label');
-      if (lbl) lbl.textContent = VIEW_LABELS[btn.dataset.nav] || btn.dataset.nav;
+      if (lbl) lbl.textContent = VIEW_LABELS[viewId] || viewId;
+
+      // Switch view if it's a sidebar or bottom nav button.
+      // (Drawer buttons handle their own switching with drawer-closing logic).
+      if (btn.classList.contains('nav-btn') || btn.classList.contains('bottom-nav-btn')) {
+        if (window.switchView) {
+          window.switchView(viewId);
+        }
+      }
     }
   });
 </script>
