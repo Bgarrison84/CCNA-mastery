@@ -3,6 +3,7 @@
  */
 import { QuizEngine } from '../engine/QuizEngine.js';
 import { bus } from '../core/EventBus.js';
+import { vibrate } from '../utils/ui.js';
 
 export class GrindView {
   constructor(content, store, containerEl) {
@@ -232,7 +233,13 @@ export class GrindView {
 
   handleAnswer(idx) {
     const res = this.quiz.answer(idx);
-    // Show feedback logic... for brevity I'll keep the core flow
+    const currentQ = this.quiz.currentQuestion;
+
+    // Mistake tracking + haptic
+    if (!res.isCorrect && currentQ) this.store.recordMistake(currentQ.id);
+    if (res.isCorrect && currentQ) this.store.recordMistakeCorrect(currentQ.id);
+    vibrate(this.store, res.isCorrect ? 50 : [100, 50, 100]);
+
     if (res.isCorrect) {
        // Award XP
        this.store.addXP(10, 'quiz_correct');

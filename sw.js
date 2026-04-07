@@ -8,7 +8,7 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v6';
+const CACHE_VERSION = 'ccna-v7';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
@@ -26,6 +26,7 @@ const PRECACHE_URLS = [
   './js/engine/Subnetting.js',
   './js/engine/Terminal.js',
   './js/engine/ScriptingEngine.js',
+  './js/engine/practice_terminal.js',
   './js/ui/HUD.js',
   './js/ui/Router.js',
   './js/ui/StoryMode.js',
@@ -70,12 +71,21 @@ const PRECACHE_URLS = [
   './js/diagrams/cloud.js',
 ];
 
+// Optional assets: cached opportunistically — won't block SW install if missing
+const OPTIONAL_URLS = [
+  './fonts/OpenDyslexic-Regular.woff2',
+];
+
 // ── Install ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())  // activate immediately
+    caches.open(CACHE_NAME).then(cache =>
+      cache.addAll(PRECACHE_URLS).then(() =>
+        Promise.all(OPTIONAL_URLS.map(url =>
+          cache.add(url).catch(() => { /* skip missing optional assets */ })
+        ))
+      )
+    ).then(() => self.skipWaiting())
   );
 });
 

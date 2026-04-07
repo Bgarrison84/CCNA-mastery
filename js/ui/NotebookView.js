@@ -31,6 +31,10 @@ export class NotebookView {
       const q = questionMap[id];
       if (!q) return '';
       const inQueue = count >= 2;
+      const streak  = this.store.getMistakeStreak ? this.store.getMistakeStreak(id) : 0;
+      const streakBadge = streak > 0
+        ? `<span class="text-green-600 text-[10px] shrink-0 font-mono" title="${streak}/3 correct in a row — graduates at 3">${streak}/3 ✓</span>`
+        : '';
       return `<div class="flex items-start gap-3 py-2 border-b border-gray-800 text-xs">
         <span class="w-5 text-center font-bold ${count >= 4 ? 'text-red-400' : count >= 2 ? 'text-yellow-400' : 'text-gray-500'}">${count}×</span>
         <div class="flex-1 min-w-0">
@@ -38,6 +42,7 @@ export class NotebookView {
           <div class="text-gray-600 mt-0.5">${q.domain} · ${q.difficulty}</div>
         </div>
         ${inQueue ? '<span class="text-green-600 text-[10px] shrink-0">in queue</span>' : ''}
+        ${streakBadge}
       </div>`;
     }).join('');
 
@@ -69,7 +74,7 @@ export class NotebookView {
     this.containerEl.innerHTML = `
       <div class="max-w-2xl mx-auto p-6 space-y-5">
         <div class="flex items-center justify-between">
-          <h2 class="text-orange-400 font-bold text-xl">Mistake Notebook</h2>
+          <h2 class="text-orange-400 font-bold text-xl">Error Log</h2>
           <div class="flex items-center gap-3">
             <span class="text-xs text-gray-600">${mistakeQs.length} mistake${mistakeQs.length !== 1 ? 's' : ''} · ${flaggedIds.length} flagged · ${customQs.length} custom</span>
             <button id="export-notebook-btn"

@@ -6,6 +6,7 @@
 import { Store }       from './core/Store.js';
 import { HUD }         from './ui/HUD.js';
 import { Router }      from './ui/Router.js';
+import { showToast }   from './utils/ui.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ async function init() {
     router = new Router(content, store, document.getElementById('app-view'));
     router.switchView('story');
 
+    initAccessibility();
     document.body.classList.remove('loading');
   } catch (err) {
     console.error('[init] Critical failure:', err);
@@ -106,5 +108,36 @@ async function init() {
 }
 
 window._allWeeksLoaded = () => true;
+
+// ─── Accessibility Init ───────────────────────────────────────────────────────
+
+function initAccessibility() {
+  const hapticEl   = document.getElementById('haptic-toggle');
+  const dyslexiaEl = document.getElementById('dyslexia-toggle');
+
+  if (hapticEl)   hapticEl.checked   = store.state.settings?.haptic ?? true;
+  if (dyslexiaEl) dyslexiaEl.checked = store.state.settings?.dyslexiaFont ?? false;
+
+  // Apply stored dyslexia font on load
+  if (store.state.settings?.dyslexiaFont) document.body.classList.add('dyslexia-font');
+
+  hapticEl?.addEventListener('change', () => store.setSetting('haptic', hapticEl.checked));
+
+  dyslexiaEl?.addEventListener('change', () => {
+    store.setSetting('dyslexiaFont', dyslexiaEl.checked);
+    document.body.classList.toggle('dyslexia-font', dyslexiaEl.checked);
+  });
+
+  // SW update notification
+  window.addEventListener('sw:update-ready', () => {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'bg-blue-900 border border-blue-600 text-blue-200 rounded px-3 py-2 text-xs max-w-xs shadow-lg cursor-pointer';
+    div.innerHTML = 'Update available — <u>tap to reload</u>';
+    div.addEventListener('click', () => window.location.reload());
+    container.appendChild(div);
+  });
+}
 
 document.addEventListener('DOMContentLoaded', init);

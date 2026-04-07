@@ -3,13 +3,52 @@
  */
 import { BossBattle } from '../engine/BossBattle.js';
 import { bus } from '../core/EventBus.js';
+import { vibrate } from '../utils/ui.js';
+
+// Flavour text per boss ID; falls back to 'default'.
+const BOSS_TAUNTS = {
+  boss_w1_the_architect: {
+    wrong:     ['Your subnetting is appalling.', 'Even a hub knows better.', 'Layer 1 would be ashamed of you.'],
+    frustrated:['You again? I expected better.', "Lucky guess, cadet. Don't count on it.", "Fine. You're smarter than I thought."],
+  },
+  boss_w2_the_switcher: {
+    wrong:     ['Spanning Tree would block you too.', 'Your MAC table is empty like your knowledge.', 'BPDU storms are more consistent than you.'],
+    frustrated:['How dare you. I am the root bridge!', "Beginner's luck. Your STP will converge eventually.", 'Unbelievable. A port just went to Forwarding.'],
+  },
+  boss_w3_the_router: {
+    wrong:     ['Your routes are unreachable.', 'OSPF would never elect you DR.', 'The routing table rejects your packet.'],
+    frustrated:['Your OSPF is... converging? Impossible.', 'You found the longest prefix match? Lucky.', 'Fine. Your routing table is less embarrassing now.'],
+  },
+  boss_w4_the_inspector: {
+    wrong:     ['Access denied. As expected.', 'Your ACL matched the implicit deny.', 'NAT translation failed. Try again.'],
+    frustrated:['You bypassed my ACL? Unacceptable.', 'Your NAT table is actually correct. Impressive.', 'I may need to rewrite my access-list.'],
+  },
+  boss_w5_the_breach: {
+    wrong:     ['Security misconfiguration detected.', 'Your ZBF policy is wide open.', "SSH? You don't even know your own key."],
+    frustrated:['Your hardening is... adequate. For now.', 'Zone-based firewall configured correctly. Suspicious.', "You've passed the audit. This time."],
+  },
+  boss_w6_the_migration: {
+    wrong:     ['Your cloud architecture is on-prem thinking.', 'REST API error 403: Forbidden knowledge.', 'Ansible failed. Check your playbook.'],
+    frustrated:['Automation working correctly? Unexpected.', 'Your API call returned 200 OK. Reluctantly impressed.', 'Fine. The migration can proceed.'],
+  },
+  default: {
+    wrong:     ['Pathetic.', 'Is that your final answer?', 'Try again, cadet.', 'Your config is rejected.'],
+    frustrated:["You're better than I expected.", "Lucky guess. Don't celebrate yet.", "Hmm. Perhaps you've been studying."],
+  },
+};
+
+function _bossTaunt(bossId, type) {
+  const pool = BOSS_TAUNTS[bossId]?.[type] || BOSS_TAUNTS.default[type];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 export class BossView {
   constructor(content, store, containerEl) {
-    this.content     = content;
-    this.store       = store;
-    this.containerEl = containerEl;
-    this.boss        = null;
+    this.content          = content;
+    this.store            = store;
+    this.containerEl      = containerEl;
+    this.boss             = null;
+    this._correctStreak   = 0;
   }
 
   render() {
@@ -49,6 +88,7 @@ export class BossView {
   startBattle(bossData) {
     this.boss = new BossBattle(bossData, this.store);
     this.boss.start();
+    this._correctStreak = 0;
 
     this.containerEl.innerHTML = `
       <div class="max-w-xl mx-auto p-6 space-y-4">
@@ -96,15 +136,38 @@ export class BossView {
 
   submitAnswer(answer) {
     const result = this.boss.answer(answer);
-    
+
+    // Haptic + streak tracking
+    vibrate(this.store, result.correct ? 50 : [100, 50, 100]);
+    if (result.correct) this._correctStreak++;
+    else this._correctStreak = 0;
+
+    // Boss taunt
+    const bossId = this.boss.bossData?.id || '';
+    const taunt = result.correct && this._correctStreak >= 3
+      ? _bossTaunt(bossId, 'frustrated')
+      : !result.correct
+        ? _bossTaunt(bossId, 'wrong')
+        : null;
+
+    // Show feedback
+    const feedbackEl = document.getElementById('boss-feedback');
+    if (feedbackEl) {
+      feedbackEl.classList.remove('hidden');
+      feedbackEl.className = `mt-3 p-2 rounded text-xs ${result.correct ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`;
+      const base = result.correct ? 'Correct!' : 'Incorrect!';
+      feedbackEl.innerHTML = taunt ? `${base} <em class="opacity-70 ml-1">"${taunt}"</em>` : base;
+    }
+
     // Update bars
-    document.getElementById('boss-hp-bar').style.width = this.boss.hp + '%';
-    // Simplified: player HP logic...
-    
+    const hpBar = document.getElementById('boss-hp-bar');
+    if (hpBar) hpBar.style.width = this.boss.hp + '%';
+
     if (result.done) {
-      this.renderEnd(result);
+      if (result.victory) vibrate(this.store, 300);
+      setTimeout(() => this.renderEnd(result), 1500);
     } else {
-      this.renderQuestion();
+      setTimeout(() => this.renderQuestion(), 1500);
     }
   }
 

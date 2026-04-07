@@ -2,6 +2,8 @@
  * LabView.js — Lab Terminal Simulator View
  */
 import { Terminal } from '../engine/Terminal.js';
+import { PracticeTerminal } from '../engine/practice_terminal.js';
+import { showToast } from '../utils/ui.js';
 
 export class LabView {
   constructor(content, store, containerEl) {
@@ -117,6 +119,32 @@ export class LabView {
   }
 
   loadLab(lab) {
+    // Beginner ghost-text labs use PracticeTerminal instead
+    if (lab.beginner_ghost && lab.practice_lab_id) {
+      const outputEl = document.getElementById('terminal-output');
+      const inputBar  = outputEl?.nextElementSibling;
+      if (outputEl) {
+        if (inputBar) inputBar.style.display = 'none';
+        ['btn-validate', 'btn-reset', 'btn-hint'].forEach(id =>
+          document.getElementById(id)?.classList.add('hidden'));
+        document.getElementById('validation-panel')?.classList.add('hidden');
+        document.getElementById('lab-title').textContent = lab.title + ' [Guided]';
+        outputEl.style.padding = '0';
+        outputEl.innerHTML = '';
+        const pt = new PracticeTerminal(outputEl, lab.practice_lab_id, {
+          onComplete: ({ xp }) => {
+            this.store.completeLab(lab.id, 100);
+            this.store.addXP(xp, 'lab_complete');
+            showToast(`Lab complete! +${xp} XP`);
+            if (inputBar) inputBar.style.display = '';
+            outputEl.style.padding = '';
+          },
+        });
+        pt.start();
+      }
+      return;
+    }
+
     if (!this.terminal) return;
     this.terminal.loadLab(lab);
     document.getElementById('lab-title').textContent = lab.title;

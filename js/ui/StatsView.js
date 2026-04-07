@@ -226,12 +226,37 @@ export class StatsView {
       if (!file) return;
       const reader = new FileReader();
       reader.onload = ev => {
+        e.target.value = ''; // reset so same file can be re-imported
+        let parsed;
+        try { parsed = JSON.parse(ev.target.result); }
+        catch { showToast('Import failed — not valid JSON.'); return; }
+
+        const REQUIRED = ['playerName', 'level', 'xp', 'quizHistory', 'completedLabs'];
+        const missing = REQUIRED.filter(k => !(k in parsed));
+        if (missing.length) { showToast(`Invalid save — missing: ${missing.join(', ')}.`); return; }
+
+        const cur = this.store.state;
+        const pct = n => `${Math.round(n)}%`;
+        const curAcc = cur.quizHistory?.length
+          ? pct(cur.quizHistory.reduce((s, r) => s + (r.score || 0), 0) / cur.quizHistory.length)
+          : 'N/A';
+        const impAcc = parsed.quizHistory?.length
+          ? pct(parsed.quizHistory.reduce((s, r) => s + (r.score || 0), 0) / parsed.quizHistory.length)
+          : 'N/A';
+        const msg = [
+          `Import "${parsed.playerName}" — Lv ${parsed.level} · ${parsed.xp} XP`,
+          `Current: ${cur.playerName} — Lv ${cur.level} · ${cur.xp} XP · ${curAcc} avg`,
+          `Imported: ${parsed.playerName} — Lv ${parsed.level} · ${parsed.xp} XP · ${impAcc} avg`,
+          `\nThis will REPLACE your current save. Continue?`,
+        ].join('\n');
+        if (!confirm(msg)) return;
+
         try {
           this.store.importSave(ev.target.result);
           this.render();
-          showToast('Save imported!');
+          showToast('Save imported successfully!');
         } catch {
-          showToast('Import failed!');
+          showToast('Import failed — could not restore state.');
         }
       };
       reader.readAsText(file);

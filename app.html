@@ -242,6 +242,22 @@
     .theme-swatch.active { border-color: white !important; }
     .theme-swatch.locked { cursor: not-allowed; opacity: 0.4; }
 
+    /* ── Dyslexia-friendly font mode ────────────────────────── */
+    body.dyslexia-font {
+      font-family: 'OpenDyslexic', 'Comic Sans MS', 'Arial', sans-serif !important;
+      letter-spacing: 0.05em; word-spacing: 0.18em; line-height: 1.75;
+    }
+    body.dyslexia-font .font-mono, body.dyslexia-font #terminal-input,
+    body.dyslexia-font pre, body.dyslexia-font code {
+      font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace !important;
+      letter-spacing: normal; word-spacing: normal;
+    }
+    @font-face {
+      font-family: 'OpenDyslexic';
+      src: url('./fonts/OpenDyslexic-Regular.woff2') format('woff2');
+      font-weight: normal; font-style: normal; font-display: swap;
+    }
+
     /* ── Micro-animations ────────────────────────────────────── */
 
     /* Floating +XP label */
@@ -553,6 +569,19 @@
     </div>
 
     <!-- Sidebar Inventory (compact) -->
+    <!-- Accessibility toggles -->
+    <div id="accessibility-bar" class="px-4 py-2 border-t border-green-900/40 space-y-1.5">
+      <span class="text-[10px] text-green-900 uppercase tracking-widest block">Accessibility</span>
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" id="haptic-toggle" class="accent-green-500 w-3.5 h-3.5">
+        <span class="text-[11px] text-gray-500">Haptic feedback</span>
+      </label>
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" id="dyslexia-toggle" class="accent-green-500 w-3.5 h-3.5">
+        <span class="text-[11px] text-gray-500">Dyslexia font</span>
+      </label>
+    </div>
+
     <div class="px-4 py-3 border-t border-green-900/40 max-h-40 overflow-y-auto" id="sidebar-inventory">
       <div class="text-[10px] text-green-900 uppercase tracking-widest mb-1">Items</div>
       <ul id="inventory-list" class="space-y-0.5 text-xs">
@@ -849,7 +878,7 @@
             const newWorker = reg.installing;
             newWorker?.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[SW] Update available — reload to apply.');
+                window.dispatchEvent(new CustomEvent('sw:update-ready'));
               }
             });
           });

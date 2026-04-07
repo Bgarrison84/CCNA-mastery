@@ -1,22 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls -lh /home/briston/test-claude-project/ccna-mastery/*.html)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(node:*)",
-      "Bash(python3 -c \":*)",
+      "Bash(git fetch:*)",
+      "Bash(git stash:*)",
+      "Bash(git reset:*)",
+      "Bash(wc:*)",
       "Bash(python3:*)",
-      "Bash(head -20 grep -n \"dashoffset\\\\|stroke-dash\\\\|xp-float\\\\|hp-flash\\\\|hp-pulse\" /home/briston/test-claude-project/ccna-mastery/app.html)",
-      "Bash(head -20 grep -n \"_drawRadar\\\\|radar.*anim\\\\|radarDash\" /home/briston/test-claude-project/ccna-mastery/js/main.js)",
-      "Bash(mkdir -p /home/briston/Template)",
-      "Bash(mv /home/briston/test-claude-project/ccna-mastery/APP_TEMPLATE.md /home/briston/Template/APP_TEMPLATE.md)",
-      "Bash(mkdir -p /home/briston/CySA+)",
-      "Bash(cp /home/briston/Template/APP_TEMPLATE.md /home/briston/CySA+/APP_TEMPLATE.md)",
-      "Bash(source /home/briston/.bashrc)",
-      "Bash(sed -n '22,414p' /home/briston/test-claude-project/ccna-mastery/CLAUDE.md)",
-      "Read(//tmp/**)"
+      "Bash(node --check /home/briston/test-claude-project/ccna-mastery/js/main.js)",
+      "Bash(node --check /home/briston/test-claude-project/ccna-mastery/js/core/Store.js)",
+      "Bash(node --check /home/briston/test-claude-project/ccna-mastery/js/utils/ui.js)",
+      "Bash(node --check /home/briston/test-claude-project/ccna-mastery/js/ui/GrindView.js)",
+      "Bash(node --check /home/briston/test-claude-project/ccna-mastery/js/ui/BossView.js)",
+      "Bash(git add:*)"
     ]
   }
 }

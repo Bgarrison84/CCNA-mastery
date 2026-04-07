@@ -37,10 +37,13 @@ const DEFAULT_STATE = {
   settings: {
     sfxEnabled: true,
     theme: 'terminal-green', // 'terminal-green' | 'amber' | 'blue'
+    haptic: true,            // vibration feedback on mobile (navigator.vibrate)
+    dyslexiaFont: false,     // apply dyslexia-friendly font + spacing
   },
   quizHistory: [],           // [{ date, total, correct, score, mode, domainStats }]
   streak: { current: 0, lastLogin: null, longest: 0 }, // daily login streak
   mistakeNotebook: {},       // { questionId: wrongCount }
+  mistakeStreaks:  {},       // { questionId: consecutiveCorrect } — auto-graduates at 3
   reviewSchedule: {},        // { questionId: { correctStreak, intervalIndex, dueDate, totalSeen, totalCorrect } }
   studyMinutes: 0,           // cumulative time spent in the app (minutes)
   flaggedQuestions: [],      // [questionId, ...]
@@ -265,12 +268,33 @@ export class Store {
   recordMistake(questionId) {
     if (!this._state.mistakeNotebook) this._state.mistakeNotebook = {};
     this._state.mistakeNotebook[questionId] = (this._state.mistakeNotebook[questionId] || 0) + 1;
+    if (!this._state.mistakeStreaks) this._state.mistakeStreaks = {};
+    this._state.mistakeStreaks[questionId] = 0; // wrong answer resets streak
     this._persist();
   }
 
   /** Clear the mistake notebook. */
+  /** Record a correct answer for a mistake question; auto-graduates after 3 consecutive correct. */
+  recordMistakeCorrect(questionId) {
+    const GRADUATE_AT = 3;
+    if (!this._state.mistakeNotebook || !(questionId in this._state.mistakeNotebook)) return;
+    if (!this._state.mistakeStreaks) this._state.mistakeStreaks = {};
+    const streak = (this._state.mistakeStreaks[questionId] || 0) + 1;
+    this._state.mistakeStreaks[questionId] = streak;
+    if (streak >= GRADUATE_AT) {
+      delete this._state.mistakeNotebook[questionId];
+      delete this._state.mistakeStreaks[questionId];
+    }
+    this._persist();
+  }
+
+  getMistakeStreak(questionId) {
+    return (this._state.mistakeStreaks || {})[questionId] || 0;
+  }
+
   clearNotebook() {
     this._state.mistakeNotebook = {};
+    this._state.mistakeStreaks  = {};
     this._persist();
     bus.emit('state:changed', this.state);
   }
@@ -689,6 +713,13 @@ export class Store {
   setTheme(theme) {
     if (!this._state.settings) this._state.settings = {};
     this._state.settings.theme = theme;
+    this._persist();
+  }
+
+  /** Generic setter for any key inside settings. */
+  setSetting(key, value) {
+    if (!this._state.settings) this._state.settings = {};
+    this._state.settings[key] = value;
     this._persist();
   }
 

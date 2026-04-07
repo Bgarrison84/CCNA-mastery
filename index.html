@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CCNA Mastery — Free, Offline, Gamified CCNA 200-301 Study App</title>
-  <meta name="description" content="Master the CCNA 200-301 for free. 4,186 questions, 33 CLI labs, spaced repetition, exam simulator, boss battles — 100% offline PWA. No account needed.">
+  <meta name="description" content="Master the CCNA 200-301 for free. 4,306 questions, 36 CLI labs, spaced repetition, exam simulator, boss battles — 100% offline PWA. No account needed.">
 
   <script src="./css/tailwind.js"></script>
   <script>
@@ -213,7 +213,7 @@
   <!-- Tagline -->
   <p class="fade-up-3 text-lg sm:text-xl max-w-2xl mx-auto mb-10 leading-relaxed" style="color:#8fbc8f;">
     Master the <strong style="color:#c8ffc8;">CCNA 200-301</strong> — free, offline, gamified.<br>
-    4,186 questions · spaced repetition · CLI labs · boss battles.
+    4,306 questions · spaced repetition · CLI labs · boss battles.
   </p>
 
   <!-- CTA buttons -->
@@ -232,18 +232,44 @@
 
 
 <!-- ═══════════════════════════════════════════
-     STATS BAR
+     STATS BAR  (count-up animation on scroll)
 ═══════════════════════════════════════════ -->
-<div style="background: var(--bg-surface); border-top: 1px solid rgba(0,255,65,0.08); border-bottom: 1px solid rgba(0,255,65,0.08);">
+<div id="stats-bar" style="background: var(--bg-surface); border-top: 1px solid rgba(0,255,65,0.08); border-bottom: 1px solid rgba(0,255,65,0.08);">
   <div class="max-w-6xl mx-auto px-6 py-5 flex flex-wrap justify-center gap-4 text-xs tracking-wider">
-    <span class="stat-pill px-4 py-2 rounded">📋 4,186 questions</span>
-    <span class="stat-pill px-4 py-2 rounded">⌨️ 33 CLI labs</span>
-    <span class="stat-pill px-4 py-2 rounded">⚔️ 6 boss battles</span>
-    <span class="stat-pill px-4 py-2 rounded">🧠 Spaced repetition</span>
+    <span class="stat-pill px-4 py-2 rounded">📋 <span class="count-up" data-target="4306">4,306</span> questions</span>
+    <span class="stat-pill px-4 py-2 rounded">⌨️ <span class="count-up" data-target="36">36</span> CLI labs</span>
+    <span class="stat-pill px-4 py-2 rounded">⚔️ <span class="count-up" data-target="8">8</span> boss battles</span>
+    <span class="stat-pill px-4 py-2 rounded">🧩 <span class="count-up" data-target="5">5</span> mega labs</span>
     <span class="stat-pill px-4 py-2 rounded">📡 100% offline PWA</span>
     <span class="stat-pill px-4 py-2 rounded">🆓 Forever free</span>
   </div>
 </div>
+<script>
+(function() {
+  function animateCountUp(el) {
+    const target = parseInt(el.dataset.target, 10);
+    const start = performance.now();
+    const duration = 1200;
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = Math.round(eased * target).toLocaleString();
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  const bar = document.getElementById('stats-bar');
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        obs.disconnect();
+        bar.querySelectorAll('.count-up').forEach(animateCountUp);
+      }
+    }, { threshold: 0.3 });
+    obs.observe(bar);
+  }
+})();
+</script>
 
 
 <!-- ═══════════════════════════════════════════
@@ -267,7 +293,7 @@
     <div class="feature-card rounded-lg p-6">
       <div class="text-2xl mb-3">⚡</div>
       <h3 class="font-bold mb-2 text-sm tracking-wide" style="color: var(--terminal-green);">The Grind</h3>
-      <p class="text-xs leading-relaxed" style="color:#6a9a6a;">Adaptive quiz engine with 4,186 questions across all 6 CCNA domains. Multiple-choice, drag-and-drop, multi-select, and scenario questions.</p>
+      <p class="text-xs leading-relaxed" style="color:#6a9a6a;">Adaptive quiz engine with 4,306 questions across all 6 CCNA domains. Multiple-choice, drag-and-drop, multi-select, and scenario questions.</p>
     </div>
 
     <div class="feature-card rounded-lg p-6">
@@ -428,7 +454,7 @@
         <span class="text-lg font-black mt-0.5" style="color: var(--terminal-green);">03</span>
         <div>
           <div class="text-sm font-semibold mb-1" style="color:#c8ffc8;">Do CLI labs every week — muscle memory matters</div>
-          <p class="text-xs leading-relaxed" style="color:#6a9a6a;">The real exam includes simulation tasks. You need to type <code style="color: var(--terminal-green);">ip address 192.168.1.1 255.255.255.0</code> without thinking. The 33 CLI labs build that automaticity.</p>
+          <p class="text-xs leading-relaxed" style="color:#6a9a6a;">The real exam includes simulation tasks. You need to type <code style="color: var(--terminal-green);">ip address 192.168.1.1 255.255.255.0</code> without thinking. The 36 CLI labs build that automaticity.</p>
         </div>
       </div>
     </div>
