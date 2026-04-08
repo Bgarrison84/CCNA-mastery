@@ -165,7 +165,7 @@ export class Store {
     } catch {
       console.warn('[Store] Failed to load saved state, using defaults.');
     }
-    return { ...DEFAULT_STATE };
+    return structuredClone(DEFAULT_STATE);
   }
 
   _persist() {
