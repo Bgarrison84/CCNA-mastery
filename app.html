@@ -890,7 +890,73 @@
         .catch(err => console.warn('[SW] Registration failed:', err));
     });
   }
+
+  // ── PWA Install Prompt ─────────────────────────────────────────────────────
+  (function initPwaInstall() {
+    const DISMISSED_KEY = 'ccna_pwa_install_dismissed';
+    if (localStorage.getItem(DISMISSED_KEY)) return;
+    // Already installed (standalone mode) — no need to prompt
+    if (window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true) return;
+
+    let _deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      _deferredPrompt = e;
+      // Show the banner after 30 s of engagement
+      setTimeout(showBanner, 30000);
+    });
+
+    function showBanner() {
+      if (!_deferredPrompt) return;
+      if (localStorage.getItem(DISMISSED_KEY)) return;
+      const banner = document.getElementById('pwa-install-banner');
+      if (banner) banner.classList.remove('translate-y-full', 'opacity-0');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const banner  = document.getElementById('pwa-install-banner');
+      const btnInst = document.getElementById('pwa-install-btn');
+      const btnDis  = document.getElementById('pwa-dismiss-btn');
+      if (!banner) return;
+
+      btnInst?.addEventListener('click', async () => {
+        if (!_deferredPrompt) return;
+        _deferredPrompt.prompt();
+        const { outcome } = await _deferredPrompt.userChoice;
+        _deferredPrompt = null;
+        banner.classList.add('translate-y-full', 'opacity-0');
+        if (outcome === 'dismissed') localStorage.setItem(DISMISSED_KEY, '1');
+      });
+
+      btnDis?.addEventListener('click', () => {
+        banner.classList.add('translate-y-full', 'opacity-0');
+        localStorage.setItem(DISMISSED_KEY, '1');
+      });
+    });
+  })();
 </script>
+
+<!-- PWA Install Banner — hidden until triggered by beforeinstallprompt -->
+<div id="pwa-install-banner"
+     class="fixed bottom-0 inset-x-0 z-50 translate-y-full opacity-0 transition-all duration-500
+            bg-gray-900 border-t border-green-700 px-4 py-3 flex items-center gap-3 shadow-2xl"
+     style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
+  <div class="flex-1 min-w-0">
+    <p class="text-green-300 text-sm font-semibold">Install CCNA Mastery</p>
+    <p class="text-gray-400 text-xs truncate">Add to home screen for offline access &amp; faster loads</p>
+  </div>
+  <button id="pwa-install-btn"
+          class="px-4 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded shrink-0">
+    Install
+  </button>
+  <button id="pwa-dismiss-btn"
+          class="px-3 py-1.5 text-gray-500 hover:text-gray-300 text-xs rounded shrink-0"
+          aria-label="Dismiss">
+    Not now
+  </button>
+</div>
 
 </body>
 </html>

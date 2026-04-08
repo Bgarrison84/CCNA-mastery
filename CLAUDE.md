@@ -10,7 +10,7 @@ Source: GEMINI.md backlog. Work through in order, one per session.
 
 ### UX & Immersion
 5. [x] **Retro Soundscape** *(done 2026-04-08)* — Add 8-bit blips for correct answers and Level-Up fanfares (Web Audio API) with mute toggle.
-6. [ ] **PWA "Install" Prompt** — Improved custom UI to encourage home-screen installation.
+6. [x] **PWA "Install" Prompt** *(done 2026-04-08)* — Improved custom UI to encourage home-screen installation.
 
 ### Infrastructure
 7. [ ] **Tailwind Post-Compilation** — Move from runtime `tailwind.js` to a compiled CSS build to reduce initial payload by 1MB+.
