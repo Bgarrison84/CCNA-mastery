@@ -113,9 +113,48 @@ export function render(containerEl) {
           </div>
         ` : `
           <!-- Progress bar -->
-...
-        <!-- Navigation -->
-...
+          <div style="display:flex;gap:3px;margin-bottom:16px;">
+            ${Array.from({length: total}, (_, i) => `<div style="flex:1;height:4px;border-radius:2px;background:${i < step ? '#00ff41' : i === step ? 'rgba(0,255,65,0.6)' : '#1f2937'};"></div>`).join('')}
+          </div>
+
+          <!-- Sequence diagram -->
+          <div style="background:#0d0d0d;border:1px solid rgba(0,255,65,0.12);border-radius:6px;padding:16px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
+              <div style="color:${isClient?'#00ff41':'#a5b4fc'};font-weight:700;font-size:0.8rem;">CLIENT</div>
+              <div style="color:${!isClient?'#00ff41':'#6ee7b7'};font-weight:700;font-size:0.8rem;">SERVER</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+              ${isClient
+                ? `<div style="width:60px;text-align:center;font-size:0.65rem;color:#6b7280;">sends</div>
+                   <div style="flex:1;position:relative;height:2px;background:linear-gradient(to right,#00ff41,rgba(0,255,65,0.2));">
+                     <div style="position:absolute;right:-4px;top:-5px;color:#00ff41;font-size:0.7rem;">▶</div>
+                   </div>
+                   <div style="width:60px;text-align:center;font-size:0.65rem;color:#6b7280;">receives</div>`
+                : `<div style="width:60px;text-align:center;font-size:0.65rem;color:#6b7280;">receives</div>
+                   <div style="flex:1;position:relative;height:2px;background:linear-gradient(to left,#00ff41,rgba(0,255,65,0.2));">
+                     <div style="position:absolute;left:-4px;top:-5px;color:#00ff41;font-size:0.7rem;">◀</div>
+                   </div>
+                   <div style="width:60px;text-align:center;font-size:0.65rem;color:#6b7280;">sends</div>`}
+            </div>
+            <div style="text-align:center;margin-bottom:8px;">
+              <span style="background:rgba(0,255,65,0.1);border:1px solid rgba(0,255,65,0.3);border-radius:4px;padding:3px 10px;font-weight:700;color:#00ff41;font-size:0.75rem;">${s.flag}</span>
+              <span style="color:#6b7280;font-size:0.65rem;margin-left:8px;">SEQ=${s.seq} ACK=${s.ack}</span>
+            </div>
+            <div style="font-size:0.72rem;color:#9ca3af;line-height:1.5;border-top:1px solid #1f2937;padding-top:10px;">${s.label}</div>
+            <div style="font-size:0.68rem;color:#6b7280;line-height:1.5;margin-top:6px;">${s.detail}</div>
+            <div style="display:flex;gap:16px;margin-top:10px;font-size:0.62rem;font-family:monospace;">
+              <span>CLIENT: <span style="color:#a5b4fc;">${s.state.client}</span></span>
+              <span>SERVER: <span style="color:#6ee7b7;">${s.state.server}</span></span>
+            </div>
+          </div>
+
+          <!-- Navigation -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
+            <button id="tcp-prev" style="padding:6px 16px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;background:transparent;border:1px solid rgba(0,255,65,0.2);color:${step>0?'#00ff41':'#374151'};" ${step===0?'disabled':''}>← Prev</button>
+            <span style="font-size:0.65rem;color:#6b7280;font-family:monospace;">${step+1} / ${total}</span>
+            <button id="tcp-next" style="padding:6px 16px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.72rem;background:transparent;border:1px solid rgba(0,255,65,0.2);color:${step<total-1?'#00ff41':'#374151'};" ${step===total-1?'disabled':''}>Next →</button>
+          </div>
+        `}
       </div>`;
 
     containerEl.querySelectorAll('.tcp-mode').forEach(btn => {
@@ -181,7 +220,6 @@ export function render(containerEl) {
         document.dispatchEvent(new CustomEvent('ccna-xp', { detail: { amount: 30, reason: 'TCP Handshake' } }));
       } else fb.innerHTML = `<span style="color:#ffb000;">${correct}/3 correct. Try again!</span>`;
     };
-  }
   }
 
   draw();

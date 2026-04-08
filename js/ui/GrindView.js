@@ -212,17 +212,18 @@ export class GrindView {
           <div>Question \${current} / \${total}</div>
           <div>\${q.domain} \${q._custom ? '<span class="text-blue-400 ml-2">✏️ Custom</span>' : ''}</div>
         </div>
-        
+
         <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
           \${q.scenario_text ? \`<div class="text-xs text-gray-500 mb-3 italic bg-black/30 p-3 rounded border border-gray-800">\${q.scenario_text}</div>\` : ''}
           <div class="text-green-100 leading-relaxed font-semibold">\${q.question}</div>
-          
+
           <div id="quiz-options" class="mt-6 space-y-2">
             \${q.options.map((opt, i) => \`
               <button data-idx="\${i}" class="quiz-opt w-full text-left px-4 py-3 rounded border border-gray-700 hover:border-green-500 transition-colors text-sm text-gray-300">
                 \${opt}
               </button>\`).join('')}
           </div>
+          <div id="quiz-feedback" class="hidden mt-4 p-3 rounded text-sm font-mono"></div>
         </div>
       </div>\`;
 
@@ -232,29 +233,62 @@ export class GrindView {
   }
 
   handleAnswer(idx) {
+    const currentQ = this.quiz.currentQuestion; // capture BEFORE answer() advances index
     const res = this.quiz.answer(idx);
-    const currentQ = this.quiz.currentQuestion;
 
     // Mistake tracking + haptic
     if (!res.isCorrect && currentQ) this.store.recordMistake(currentQ.id);
     if (res.isCorrect && currentQ) this.store.recordMistakeCorrect(currentQ.id);
     vibrate(this.store, res.isCorrect ? 50 : [100, 50, 100]);
 
-    if (res.isCorrect) {
-       // Award XP
-       this.store.addXP(10, 'quiz_correct');
-    }
-    
+    // Reveal: highlight correct/wrong options, show explanation
+    this._revealAnswer(idx, currentQ, res.isCorrect);
+
     if (this.quiz.isFinished) {
-      this.renderResults();
+      setTimeout(() => this.renderResults(), 1400);
     } else {
-      setTimeout(() => this.renderQuizQuestion(), 1000);
+      setTimeout(() => this.renderQuizQuestion(), 1400);
+    }
+  }
+
+  _revealAnswer(selectedIdx, q, isCorrect) {
+    const correctIdx = parseInt(q.correct_answer);
+    document.querySelectorAll('.quiz-opt').forEach(btn => {
+      const i = parseInt(btn.dataset.idx);
+      btn.disabled = true;
+      if (i === correctIdx) {
+        btn.className = btn.className.replace('border-gray-700', 'border-green-500') + ' bg-green-900/40 text-green-200';
+      } else if (i === selectedIdx && !isCorrect) {
+        btn.className = btn.className.replace('border-gray-700', 'border-red-500') + ' bg-red-900/30 text-red-300';
+      }
+    });
+
+    const fb = document.getElementById('quiz-feedback');
+    if (fb) {
+      fb.classList.remove('hidden');
+      fb.className = fb.className.replace('hidden', '').trim();
+      if (isCorrect) {
+        fb.className += ' border border-green-800 bg-green-900/30 text-green-300';
+        fb.innerHTML = \`<span class="font-bold text-green-400">✓ Correct!</span>\${q.explanation ? \` <span class="text-green-200">\${q.explanation}</span>\` : ''}\`;
+      } else {
+        fb.className += ' border border-red-800 bg-red-900/20 text-red-300';
+        fb.innerHTML = \`<span class="font-bold text-red-400">✗ Incorrect.</span> <span class="text-gray-400">Correct: <span class="text-green-300">\${q.options[correctIdx]}</span></span>\${q.explanation ? \`<br><span class="text-gray-500 text-xs">\${q.explanation}</span>\` : ''}\`;
+      }
     }
   }
 
   renderResults() {
-    // Render quiz summary...
-    this.containerEl.innerHTML = \`<div class="p-10 text-center"><h2 class="text-2xl text-green-400">Quiz Finished!</h2><button id="back-to-grind" class="mt-4 px-6 py-2 bg-green-700 text-white rounded">Back</button></div>\`;
+    const history = this.quiz.results || [];
+    const correct = history.filter(r => r.correct).length;
+    const total   = history.length;
+    const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
+    this.containerEl.innerHTML = \`
+      <div class="max-w-xl mx-auto p-10 text-center space-y-4">
+        <h2 class="text-2xl text-green-400 font-bold">Session Complete</h2>
+        <div class="text-5xl font-black \${pct >= 70 ? 'text-green-400' : 'text-yellow-400'}">\${pct}%</div>
+        <div class="text-gray-400 text-sm">\${correct} / \${total} correct</div>
+        <button id="back-to-grind" class="mt-4 px-6 py-2 bg-green-700 hover:bg-green-600 text-white rounded font-semibold">Back to Grind</button>
+      </div>\`;
     this.containerEl.querySelector('#back-to-grind').onclick = () => this.render();
   }
 }
