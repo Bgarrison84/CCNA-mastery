@@ -397,3 +397,12 @@ Brainstormed improvements from session review. Work through in order, one per se
 - [x] Nav button "⌨ Scripting" added to sidebar; VIEW_LABELS entry; switchView case
 
 ---
+
+## Phase 13 — Advanced Interactivity (Items 1–3, done 2026-04-07)
+Source: GEMINI.md backlog.
+
+1. [x] **Animated Encapsulation Visualizer** — `js/diagrams/encapsulation.js`; 7-step OSI Layer 7→1 PDU build-up with color-coded header blocks; layer selector strip; keyboard nav; wired into `DIAGRAM_MODULES` + `ReferenceView.js` + `sw.js` (ccna-v8). (done 2026-04-07)
+2. [x] **Interactive ACL Simulator** — `js/diagrams/acl.js` rebuilt with two tabs: **Trace** (animated top-down match with IP input) + **Build** (drag-and-drop rule reorder; real-time traffic-flow matrix for 4 test IPs; add/delete/reset rules). (done 2026-04-07)
+3. [x] **Infinite Subnetting Drill / Speed Run** — `js/diagrams/subnetting.js` extended with third tab **⚡ Speed Drill**: 90-second countdown timer, procedural question generation (/8–/30, 6 question types: net/bcast/first/last/hosts/mask), streak counter, personal best in localStorage, XP award (8 XP/correct), hint + skip buttons, free-text input for speed. (done 2026-04-07)
+
+---
