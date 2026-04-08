@@ -8,15 +8,16 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v11';
+const CACHE_VERSION = 'ccna-v12';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
 const PRECACHE_URLS = [
   './',
-  './index.html',   // landing page
+  './index.html',   // landing page (entry point)
+  './landing.html', // alternate landing page
   './app.html',     // the app itself
-  './css/tailwind.js',
+  './css/app.css',
   './manifest.json',
   './js/main.js',
   './js/core/EventBus.js',

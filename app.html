@@ -9,25 +9,8 @@
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <meta name="theme-color" content="#00ff41">
 
-  <!-- Tailwind CSS — local copy for offline-first support (see sw.js) -->
-  <script src="./css/tailwind.js"></script>
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'] },
-          colors: {
-            terminal: { green: '#00ff41', amber: '#ffb000', dim: '#003b00' },
-          },
-          animation: {
-            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            'scan': 'scan 8s linear infinite',
-          },
-        },
-      },
-    };
-  </script>
+  <!-- Compiled Tailwind CSS (post-processed, ~37KB vs 407KB runtime) -->
+  <link rel="stylesheet" href="./css/app.css">
 
   <style>
     /* ── Base Terminal Aesthetic ─────────────────────────────── */
