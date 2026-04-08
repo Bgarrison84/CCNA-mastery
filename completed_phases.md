@@ -406,3 +406,24 @@ Source: GEMINI.md backlog.
 3. [x] **Infinite Subnetting Drill / Speed Run** — `js/diagrams/subnetting.js` extended with third tab **⚡ Speed Drill**: 90-second countdown timer, procedural question generation (/8–/30, 6 question types: net/bcast/first/last/hosts/mask), streak counter, personal best in localStorage, XP award (8 XP/correct), hint + skip buttons, free-text input for speed. (done 2026-04-07)
 
 ---
+
+## Phase 11 — Polish & Accessibility (ALL DONE — committed 2026-04-07)
+
+1. [x] **Save Game Export / Import** — "Export Save" downloads `ccna-mastery-save.json`. "Import Save" re-hydrates via `store.importSave()`. Key validation + diff summary before confirm. Wired in StatsView.
+2. [x] **Haptic Feedback** — `vibrate(store, pattern)` in `js/utils/ui.js`; respects `settings.haptic`; fires in GrindView, BossView.
+3. [x] **Service Worker Update Notification** — `sw:update-ready` CustomEvent dispatched on `controllerchange`; persistent clickable toast in `main.js`.
+4. [x] **Mid-Boss-Battle Taunts** — `BOSS_TAUNTS` constant per boss ID (taunt + frustrated arrays); shown on wrong answer / 3-correct streak in BossView.
+5. [x] **Dyslexia-Friendly Font Option** — `@font-face` OpenDyslexic in `app.html`; `settings.dyslexiaFont` in Store; `body.dyslexia-font` CSS class; toggle in accessibility sidebar.
+6. [x] **Jeremy's IT Lab Video Links** — `citationHtml()` handles `{ type:'video', url }` → "▶ Watch on YouTube" link. 10 questions with video refs added (weeks 1–5).
+7. [x] **Beginner CLI Ghost-Text Labs** — `js/engine/practice_terminal.js` standalone engine; `beginner_ghost: true` on `lab_w1_ios_basics` + `lab_w1_basic_config` in meta.json.
+8. [x] **Mistake Notebook UX Rebrand** — Renamed to "Error Log"; `mistakeStreaks{}` in DEFAULT_STATE; `recordMistakeCorrect(id)` graduates after 3 consecutive correct; `getMistakeStreak()` getter.
+9. [x] **Landing Page Social Proof Panel** — Animated count-up ("4306Q · 36 labs · 8 bosses · 5 mega labs") in `index.html` via IntersectionObserver + cubic ease-out.
+10. [x] **Bug Fix — IDB Timeout & SW Missing Files** — `_openIDB()` has 3s timeout + `req.onblocked` handler; sw.js bumped to ccna-v7 with `practice_terminal.js` + optional font precache.
+
+---
+
+## Phase 13 Item 4 — Multi-Device CLI Connectivity (done 2026-04-08)
+
+4. [x] **Multi-Device CLI Connectivity** — `ping`/`traceroute` check real reachability against device interface IPs, subnets, and static routes. `telnet <ip>` and `ssh -l <user> <ip>` connect to simulated remote devices (push `_connectionStack`, switch active device context). `exit` in USER_EXEC pops the stack and returns to the originating device. sw.js bumped to ccna-v10.
+
+---
