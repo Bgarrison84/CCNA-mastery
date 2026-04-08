@@ -126,6 +126,7 @@ export class Terminal {
     this._labId      = null;
     this._devices    = null;         // multi-device map: { R1: config, R2: config }
     this._activeDevice = null;
+    this._connectionStack = [];      // remote session stack for telnet/ssh
 
     this._bindKeys();
     this._refreshPrompt();
@@ -137,10 +138,11 @@ export class Terminal {
 
   /** Load a lab: sets hostname, expected target config, and prints objective. */
   loadLab(labConfig) {
-    this._labId     = labConfig.id;
-    this._labTarget = labConfig.targetConfig || null;
-    this._mode      = MODE.USER_EXEC;
-    this._context   = {};
+    this._labId           = labConfig.id;
+    this._labTarget       = labConfig.targetConfig || null;
+    this._mode            = MODE.USER_EXEC;
+    this._context         = {};
+    this._connectionStack = [];
 
     // Multi-device support: labConfig.devices = { R1: targetConfig, R2: targetConfig }
     if (labConfig.devices && typeof labConfig.devices === 'object') {
@@ -235,7 +237,10 @@ export class Terminal {
     // ── User EXEC ───────────────────────────────────────────────────────────
     if (mode === MODE.USER_EXEC) {
       if (cmd === 'enable') return this._cmdEnable(args);
-      if (this._isAbbrev(cmd, 'show')) return this._cmdShow(args);
+      if (this._isAbbrev(cmd, 'show'))    return this._cmdShow(args);
+      if (this._isAbbrev(cmd, 'ping'))    return this._cmdPing(rawArgs);
+      if (this._isAbbrev(cmd, 'telnet'))  return this._cmdTelnet(rawArgs);
+      if (cmd === 'ssh')                  return this._cmdSsh(rawArgs);
       return this._unknownOrPriv(cmd);
     }
 
@@ -249,8 +254,10 @@ export class Terminal {
       if (this._isAbbrev(cmd, 'write'))     return this._cmdWrite(args);
       if (this._isAbbrev(cmd, 'erase'))     return this._cmdErase(args);
       if (this._isAbbrev(cmd, 'debug'))     return this._cmdDebug(args);
-      if (this._isAbbrev(cmd, 'ping'))      return this._cmdPing(rawArgs);
-      if (this._isAbbrev(cmd, 'traceroute'))return this._cmdTraceroute(rawArgs);
+      if (this._isAbbrev(cmd, 'ping'))       return this._cmdPing(rawArgs);
+      if (this._isAbbrev(cmd, 'traceroute')) return this._cmdTraceroute(rawArgs);
+      if (this._isAbbrev(cmd, 'telnet'))     return this._cmdTelnet(rawArgs);
+      if (cmd === 'ssh')                     return this._cmdSsh(rawArgs);
       return this._unknownCmd(cmd);
     }
 
@@ -1067,8 +1074,15 @@ export class Terminal {
     const target = rawArgs[0];
     if (!target) return this._err('% Incomplete command.');
     this._print(`Sending 5, 100-byte ICMP Echos to ${target}, timeout is 2 seconds:`, 'text-green-300');
-    this._print('!!!!!', 'text-green-400');
-    this._print('Success rate is 100 percent (5/5), round-trip min/avg/max = 1/2/4 ms', 'text-green-300');
+    const reach = this._checkReachability(target);
+    if (reach.reachable) {
+      this._print('!!!!!', 'text-green-400');
+      this._print(`Success rate is 100 percent (5/5), round-trip min/avg/max = 1/2/4 ms`, 'text-green-300');
+    } else {
+      this._print('.....', 'text-red-400');
+      this._print(`Success rate is 0 percent (0/5)`, 'text-red-300');
+      if (reach.reason) this._print(`% ${reach.reason}`, 'text-yellow-400');
+    }
     return { lines: [] };
   }
 
@@ -1076,9 +1090,227 @@ export class Terminal {
     const target = rawArgs[0];
     if (!target) return this._err('% Incomplete command.');
     this._print(`Tracing the route to ${target}`, 'text-green-300');
-    this._print('  1  192.168.1.1  1 msec  1 msec  2 msec', 'text-green-300');
-    this._print(`  2  ${target}  2 msec  2 msec  3 msec`, 'text-green-300');
+    const reach = this._checkReachability(target);
+    if (reach.reachable) {
+      reach.hops.forEach((hop, i) => {
+        this._print(`  ${i + 1}  ${hop}  ${1 + i} msec  ${1 + i} msec  ${2 + i} msec`, 'text-green-300');
+      });
+    } else {
+      this._print('  1  * * *', 'text-red-400');
+      this._print('  2  * * *', 'text-red-400');
+      this._print(`% Destination unreachable${reach.reason ? ' — ' + reach.reason : ''}`, 'text-yellow-400');
+    }
     return { lines: [] };
+  }
+
+  _cmdTelnet(rawArgs) {
+    const targetIp = rawArgs[0];
+    if (!targetIp) return this._err('% Incomplete command.');
+    if (!this._devices) {
+      // Single-device lab: simulate success to a plausible remote host
+      this._print(`Trying ${targetIp}...`, 'text-green-300');
+      this._print('% Connection timed out; remote host not responding', 'text-yellow-400');
+      return { lines: [] };
+    }
+    const devName = this._findDeviceByIp(targetIp);
+    if (!devName) {
+      this._print(`Trying ${targetIp}...`, 'text-green-300');
+      this._print('% Connection timed out; remote host not responding', 'text-yellow-400');
+      return { lines: [] };
+    }
+    const reach = this._checkReachability(targetIp);
+    if (!reach.reachable) {
+      this._print(`Trying ${targetIp}...`, 'text-green-300');
+      this._print(`% Destination unreachable${reach.reason ? ' — ' + reach.reason : ''}`, 'text-yellow-400');
+      return { lines: [] };
+    }
+    const targetCfg = this._devices[devName];
+    const vty = targetCfg.lines?.vty;
+    if (!vty?.login || !vty?.password) {
+      this._print(`Trying ${targetIp}...`, 'text-green-300');
+      this._print('% Connection refused by remote host (VTY not configured)', 'text-yellow-400');
+      return { lines: [] };
+    }
+    if (vty.transport === 'ssh') {
+      this._print(`Trying ${targetIp}...`, 'text-green-300');
+      this._print('% Connection refused — remote host requires SSH (use: ssh -l <user> ' + targetIp + ')', 'text-yellow-400');
+      return { lines: [] };
+    }
+    // Push current context and switch to remote device
+    this._connectionStack.push({
+      deviceName: this._activeDevice,
+      hostname:   this.hostname,
+      config:     this._config,
+      mode:       this._mode,
+      context:    { ...this._context },
+    });
+    this._activeDevice = devName;
+    this._config       = targetCfg;
+    this.hostname      = targetCfg.hostname;
+    this._mode         = MODE.USER_EXEC;
+    this._context      = {};
+    this._refreshPrompt();
+    this._print(`Trying ${targetIp}... Open`, 'text-green-300');
+    if (targetCfg.banner) this._print(targetCfg.banner, 'text-yellow-300');
+    this._print(`[Connected to ${devName} (${targetIp})] Type 'exit' to disconnect.`, 'text-cyan-400');
+    return { lines: [] };
+  }
+
+  _cmdSsh(rawArgs) {
+    // Accepts: ssh -l <user> <ip>  OR  ssh <user>@<ip>
+    let user = null, targetIp = null;
+    if (rawArgs[0] === '-l' && rawArgs[1] && rawArgs[2]) {
+      user = rawArgs[1]; targetIp = rawArgs[2];
+    } else if (rawArgs[0]?.includes('@')) {
+      [user, targetIp] = rawArgs[0].split('@');
+    } else if (rawArgs[0]) {
+      targetIp = rawArgs[0];
+    }
+    if (!targetIp) return this._err('% Usage: ssh -l <user> <ip>');
+    if (!this._devices) {
+      this._print(`% SSH connection to ${targetIp} timed out`, 'text-yellow-400');
+      return { lines: [] };
+    }
+    const devName = this._findDeviceByIp(targetIp);
+    if (!devName) {
+      this._print(`% SSH: ${targetIp}: No route to host`, 'text-yellow-400');
+      return { lines: [] };
+    }
+    const reach = this._checkReachability(targetIp);
+    if (!reach.reachable) {
+      this._print(`% SSH: ${targetIp}: No route to host`, 'text-yellow-400');
+      return { lines: [] };
+    }
+    const targetCfg = this._devices[devName];
+    const vty = targetCfg.lines?.vty;
+    const hasAuth = targetCfg.aaa?.newModel || (vty?.login && vty?.password);
+    const sshOk   = vty?.transport === 'ssh' || targetCfg.aaa?.newModel;
+    if (!hasAuth || !sshOk) {
+      this._print(`% SSH: ${targetIp}: Connection refused (SSH not configured on remote)`, 'text-yellow-400');
+      return { lines: [] };
+    }
+    // Validate user if AAA/local users configured
+    if (user && targetCfg.users && Object.keys(targetCfg.users).length > 0) {
+      if (!targetCfg.users[user.toLowerCase()]) {
+        this._print(`% Authentication failed.`, 'text-red-400');
+        return { lines: [] };
+      }
+    }
+    // Push and switch
+    this._connectionStack.push({
+      deviceName: this._activeDevice,
+      hostname:   this.hostname,
+      config:     this._config,
+      mode:       this._mode,
+      context:    { ...this._context },
+    });
+    this._activeDevice = devName;
+    this._config       = targetCfg;
+    this.hostname      = targetCfg.hostname;
+    this._mode         = MODE.USER_EXEC;
+    this._context      = {};
+    this._refreshPrompt();
+    this._print(`% Connecting to ${targetIp}... Open`, 'text-green-300');
+    if (targetCfg.banner) this._print(targetCfg.banner, 'text-yellow-300');
+    this._print(`[SSH session to ${devName} (${targetIp})${user ? ' as ' + user : ''}] Type 'exit' to disconnect.`, 'text-cyan-400');
+    return { lines: [] };
+  }
+
+  // ── Reachability helpers ────────────────────────────────────────────────────
+
+  /** Convert dotted-decimal mask to prefix length */
+  _maskToPrefix(mask) {
+    return mask.split('.').reduce((acc, oct) =>
+      acc + parseInt(oct, 10).toString(2).split('').filter(b => b === '1').length, 0);
+  }
+
+  /** Convert IP string to 32-bit integer */
+  _ipToInt(ip) {
+    return ip.split('.').reduce((acc, oct) => (acc << 8) | parseInt(oct, 10), 0) >>> 0;
+  }
+
+  /** Return true if ip is in subnet defined by network/mask */
+  _ipInSubnet(ip, network, mask) {
+    try {
+      const ipInt  = this._ipToInt(ip);
+      const netInt = this._ipToInt(network);
+      const mskInt = this._ipToInt(mask);
+      return (ipInt & mskInt) === (netInt & mskInt);
+    } catch { return false; }
+  }
+
+  /** Find device name that owns a given IP on any interface. Returns null if none. */
+  _findDeviceByIp(ip) {
+    const devs = this._devices || { [this.hostname]: this._config };
+    for (const [name, cfg] of Object.entries(devs)) {
+      for (const iface of Object.values(cfg.interfaces || {})) {
+        if (iface.ip === ip && !iface.shutdown) return name;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if targetIp is reachable from the current active device.
+   * Returns { reachable: bool, reason: string|null, hops: string[] }
+   */
+  _checkReachability(targetIp) {
+    // Single-device lab: always succeed (no topology to check)
+    if (!this._devices) {
+      return { reachable: true, reason: null, hops: ['192.168.1.1', targetIp] };
+    }
+
+    const cfg = this._config;
+    const hops = [];
+
+    // 1. Is targetIp on one of our own interfaces? (loopback to self)
+    for (const iface of Object.values(cfg.interfaces)) {
+      if (iface.ip === targetIp && !iface.shutdown) {
+        return { reachable: true, reason: null, hops: [targetIp] };
+      }
+    }
+
+    // 2. Is targetIp directly connected (same subnet as one of our up interfaces)?
+    for (const iface of Object.values(cfg.interfaces)) {
+      if (!iface.ip || !iface.mask || iface.shutdown) continue;
+      if (this._ipInSubnet(targetIp, iface.ip, iface.mask)) {
+        // Check if target IP actually exists on a connected device
+        const destDev = this._findDeviceByIp(targetIp);
+        if (destDev) {
+          return { reachable: true, reason: null, hops: [targetIp] };
+        }
+        // IP is in subnet but no device has it → simulate host unreachable
+        return { reachable: false, reason: 'Host unreachable — no device owns that IP', hops: [] };
+      }
+    }
+
+    // 3. Check static routes
+    for (const route of (cfg.routing?.static || [])) {
+      if (this._ipInSubnet(targetIp, route.network, route.mask)) {
+        const nextHop = route.nextHop;
+        hops.push(nextHop);
+        // Verify next-hop is reachable (on a connected device's interface)
+        const nhDev = this._findDeviceByIp(nextHop);
+        if (nhDev) {
+          // Is targetIp on the next-hop device?
+          const nhCfg = this._devices[nhDev];
+          for (const iface of Object.values(nhCfg.interfaces)) {
+            if (iface.ip === targetIp && !iface.shutdown) {
+              hops.push(targetIp);
+              return { reachable: true, reason: null, hops };
+            }
+            if (!iface.shutdown && iface.ip && iface.mask &&
+                this._ipInSubnet(targetIp, iface.ip, iface.mask)) {
+              hops.push(targetIp);
+              return { reachable: true, reason: null, hops };
+            }
+          }
+        }
+        return { reachable: false, reason: `No route to ${targetIp} beyond ${nextHop}`, hops: [] };
+      }
+    }
+
+    return { reachable: false, reason: `Network unreachable — no route to ${targetIp}`, hops: [] };
   }
 
   _cmdHelp() {
@@ -1094,7 +1326,10 @@ export class Terminal {
         'show ip route         - Display routing table',
         'show interfaces       - Display interface status',
         'copy run start        - Save configuration',
-        'ping <ip>             - Test connectivity',
+        'ping <ip>             - Test connectivity (checks reachability in multi-device labs)',
+        'traceroute <ip>       - Trace route to destination',
+        'telnet <ip>           - Open Telnet session to remote device',
+        'ssh -l <user> <ip>    - Open SSH session to remote device',
         'write memory          - Save config',
         'reload                - Reload device',
         'disable               - Return to User EXEC',
@@ -1159,6 +1394,19 @@ export class Terminal {
     }
     if (transitions[this._mode]) {
       return this._setMode(transitions[this._mode]);
+    }
+    // In USER_EXEC — if we're in a remote session, pop the connection stack
+    if (this._connectionStack.length > 0) {
+      const prev = this._connectionStack.pop();
+      this._print(`[Connection to ${this.hostname} closed]`, 'text-cyan-400');
+      this._activeDevice = prev.deviceName;
+      this._config       = prev.config;
+      this.hostname      = prev.hostname;
+      this._mode         = prev.mode;
+      this._context      = prev.context;
+      this._refreshPrompt();
+      this._print(`[Returned to ${this.hostname}]`, 'text-cyan-400');
+      return { lines: [] };
     }
     this._print('Bye!', 'text-gray-400');
     return { lines: [] };

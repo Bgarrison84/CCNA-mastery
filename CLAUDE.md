@@ -9,7 +9,7 @@ Technical Stack: HTML5, Tailwind CSS, Vanilla JS (ES6+ Modules). Persistence: lo
 Source: GEMINI.md backlog. Work through in order, one per session.
 
 ### High-Fidelity Simulations
-4. [ ] **Multi-Device CLI Connectivity** — Support `ping`, `telnet`, and `ssh` between simulated lab devices in `Terminal.js`. Requires device-awareness and cross-device reachability checks.
+4. [x] **Multi-Device CLI Connectivity** *(done 2026-04-08)* — Support `ping`, `telnet`, and `ssh` between simulated lab devices in `Terminal.js`. Requires device-awareness and cross-device reachability checks.
 
 ### UX & Immersion
 5. [ ] **Retro Soundscape** — Add 8-bit blips for correct answers and Level-Up fanfares (Web Audio API) with mute toggle.
