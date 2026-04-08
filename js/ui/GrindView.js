@@ -4,6 +4,7 @@
 import { QuizEngine } from '../engine/QuizEngine.js';
 import { bus } from '../core/EventBus.js';
 import { vibrate } from '../utils/ui.js';
+import { playSound } from '../utils/sound.js';
 
 export class GrindView {
   constructor(content, store, containerEl) {
@@ -240,6 +241,7 @@ export class GrindView {
     if (!res.isCorrect && currentQ) this.store.recordMistake(currentQ.id);
     if (res.isCorrect && currentQ) this.store.recordMistakeCorrect(currentQ.id);
     vibrate(this.store, res.isCorrect ? 50 : [100, 50, 100]);
+    playSound(res.isCorrect ? 'correct' : 'wrong', this.store);
 
     // Reveal: highlight correct/wrong options, show explanation
     this._revealAnswer(idx, currentQ, res.isCorrect);

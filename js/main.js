@@ -115,9 +115,11 @@ window._allWeeksLoaded = () => true;
 function initAccessibility() {
   const hapticEl   = document.getElementById('haptic-toggle');
   const dyslexiaEl = document.getElementById('dyslexia-toggle');
+  const sfxEl      = document.getElementById('sfx-toggle');
 
   if (hapticEl)   hapticEl.checked   = store.state.settings?.haptic ?? true;
   if (dyslexiaEl) dyslexiaEl.checked = store.state.settings?.dyslexiaFont ?? false;
+  if (sfxEl)      sfxEl.checked      = store.state.settings?.sfxEnabled ?? true;
 
   // Apply stored dyslexia font on load
   if (store.state.settings?.dyslexiaFont) document.body.classList.add('dyslexia-font');
@@ -128,6 +130,8 @@ function initAccessibility() {
     store.setSetting('dyslexiaFont', dyslexiaEl.checked);
     document.body.classList.toggle('dyslexia-font', dyslexiaEl.checked);
   });
+
+  sfxEl?.addEventListener('change', () => store.setSetting('sfxEnabled', sfxEl.checked));
 
   // SW update notification
   window.addEventListener('sw:update-ready', () => {

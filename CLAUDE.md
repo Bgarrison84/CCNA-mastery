@@ -9,7 +9,7 @@ Technical Stack: HTML5, Tailwind CSS, Vanilla JS (ES6+ Modules). Persistence: lo
 Source: GEMINI.md backlog. Work through in order, one per session.
 
 ### UX & Immersion
-5. [ ] **Retro Soundscape** — Add 8-bit blips for correct answers and Level-Up fanfares (Web Audio API) with mute toggle.
+5. [x] **Retro Soundscape** *(done 2026-04-08)* — Add 8-bit blips for correct answers and Level-Up fanfares (Web Audio API) with mute toggle.
 6. [ ] **PWA "Install" Prompt** — Improved custom UI to encourage home-screen installation.
 
 ### Infrastructure

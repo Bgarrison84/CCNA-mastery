@@ -4,6 +4,7 @@
 import { BossBattle } from '../engine/BossBattle.js';
 import { bus } from '../core/EventBus.js';
 import { vibrate } from '../utils/ui.js';
+import { playSound } from '../utils/sound.js';
 
 // Flavour text per boss ID; falls back to 'default'.
 const BOSS_TAUNTS = {
@@ -137,8 +138,9 @@ export class BossView {
   submitAnswer(answer) {
     const result = this.boss.answer(answer);
 
-    // Haptic + streak tracking
+    // Haptic + sound + streak tracking
     vibrate(this.store, result.correct ? 50 : [100, 50, 100]);
+    playSound(result.correct ? 'correct' : 'bossHit', this.store);
     if (result.correct) this._correctStreak++;
     else this._correctStreak = 0;
 
@@ -164,7 +166,7 @@ export class BossView {
     if (hpBar) hpBar.style.width = this.boss.hp + '%';
 
     if (result.done) {
-      if (result.victory) vibrate(this.store, 300);
+      if (result.victory) { vibrate(this.store, 300); playSound('victory', this.store); }
       setTimeout(() => this.renderEnd(result), 1500);
     } else {
       setTimeout(() => this.renderQuestion(), 1500);

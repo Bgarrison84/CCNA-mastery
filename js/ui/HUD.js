@@ -5,6 +5,7 @@
  * Handles the Pomodoro focus timer.
  */
 import { bus } from '../core/EventBus.js';
+import { playSound } from '../utils/sound.js';
 
 const POMODORO_WORK_SECS  = 25 * 60;   // 25 minutes
 const POMODORO_BREAK_SECS = 5  * 60;   // 5-minute break
@@ -239,6 +240,7 @@ export class HUD {
   }
 
   _toastLevelUp({ level }) {
+    playSound('levelUp', this.store);
     this._toast(
       `LEVEL UP! → LVL ${level}`,
       'bg-yellow-900 border-yellow-400 text-yellow-200 text-lg font-bold',
