@@ -91,16 +91,16 @@ export class StatsView {
     const weakAreaCards = weakDomains.length
       ? weakDomains.map(d => {
           const color = d.pct >= 80 ? 'text-green-400 border-green-900' : d.pct >= 60 ? 'text-yellow-400 border-yellow-900' : 'text-red-400 border-red-900';
-          return \`
-            <div class="flex items-center justify-between border \${color} rounded px-3 py-2.5">
+          return `
+            <div class="flex items-center justify-between border ${color} rounded px-3 py-2.5">
               <div class="flex-1 min-w-0 mr-3">
-                <div class="text-xs text-gray-300 truncate">\${d.domain}</div>
+                <div class="text-xs text-gray-300 truncate">${d.domain}</div>
               </div>
-              <span class="font-mono font-bold text-sm \${color.split(' ')[0]} shrink-0 mr-3">\${d.pct}%</span>
-              <button class="drill-btn shrink-0 px-2.5 py-1 text-xs bg-green-900 hover:bg-green-700 text-green-300 rounded transition-colors" data-domain="\${d.domain}">
+              <span class="font-mono font-bold text-sm ${color.split(' ')[0]} shrink-0 mr-3">${d.pct}%</span>
+              <button class="drill-btn shrink-0 px-2.5 py-1 text-xs bg-green-900 hover:bg-green-700 text-green-300 rounded transition-colors" data-domain="${d.domain}">
                 Drill
               </button>
-            </div>\`;
+            </div>`;
         }).join('')
       : '<p class="text-gray-600 text-xs py-2">Complete some quiz sessions to see weak areas.</p>';
 
@@ -108,25 +108,25 @@ export class StatsView {
       const d   = domainTotals[domain];
       const pct = d.total > 0 ? Math.round((d.correct / d.total) * 100) : null;
       const barColor = pct === null ? 'bg-gray-700' : pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-red-500';
-      return \`
+      return `
         <div class="space-y-1">
           <div class="flex justify-between text-xs">
-            <span class="text-gray-300">\${domain}</span>
-            <span class="\${pct === null ? 'text-gray-600' : pct >= 80 ? 'text-green-400' : pct >= 60 ? 'text-yellow-400' : 'text-red-400'} font-mono">\${pct === null ? 'No data' : pct + '%'}</span>
+            <span class="text-gray-300">${domain}</span>
+            <span class="${pct === null ? 'text-gray-600' : pct >= 80 ? 'text-green-400' : pct >= 60 ? 'text-yellow-400' : 'text-red-400'} font-mono">${pct === null ? 'No data' : pct + '%'}</span>
           </div>
           <div class="w-full bg-gray-800 rounded-full h-2">
-            <div class="\${barColor} h-2 rounded-full transition-all" style="width:\${pct ?? 0}%"></div>
+            <div class="${barColor} h-2 rounded-full transition-all" style="width:${pct ?? 0}%"></div>
           </div>
-        </div>\`;
+        </div>`;
     }).join('');
 
     const recentRows = recentSessions.length
       ? recentSessions.map(s => {
           const date = new Date(s.date).toLocaleDateString();
-          return \`<div class="flex justify-between text-xs py-1 border-b border-gray-800">
-            <span class="text-gray-500">\${date} <span class="text-gray-700">\${s.mode === 'exam' ? '[EXAM]' : '[GRIND]'}</span></span>
-            <span class="\${s.score >= 80 ? 'text-green-400' : s.score >= 60 ? 'text-yellow-400' : 'text-red-400'}">\${s.score}%</span>
-          </div>\`;
+          return `<div class="flex justify-between text-xs py-1 border-b border-gray-800">
+            <span class="text-gray-500">${date} <span class="text-gray-700">${s.mode === 'exam' ? '[EXAM]' : '[GRIND]'}</span></span>
+            <span class="${s.score >= 80 ? 'text-green-400' : s.score >= 60 ? 'text-yellow-400' : 'text-red-400'}">${s.score}%</span>
+          </div>`;
         }).join('')
       : '<p class="text-gray-600 text-xs text-center py-4">No sessions yet.</p>';
 
@@ -134,16 +134,16 @@ export class StatsView {
     const daysLeft = this.store.daysUntilExam;
     const examDateVal = this.store.state.examDate || '';
 
-    this.containerEl.innerHTML = \`
+    this.containerEl.innerHTML = `
       <div class="max-w-2xl mx-auto p-6 space-y-6">
         <h2 class="text-cyan-400 font-bold text-xl">Stats Dashboard</h2>
 
-        <div class="bg-gray-900 border \${readinessBorder} rounded p-5">
+        <div class="bg-gray-900 border ${readinessBorder} rounded p-5">
           <h3 class="text-sm text-gray-400 uppercase tracking-widest mb-4">Exam Readiness Score</h3>
           <div class="flex items-center gap-6">
-            <span class="text-5xl font-bold font-mono \${readinessColor}">\${readiness}%</span>
+            <span class="text-5xl font-bold font-mono ${readinessColor}">${readiness}%</span>
             <div class="flex-1">
-              <div class="text-sm \${readinessColor} font-semibold">\${readinessLabel}</div>
+              <div class="text-sm ${readinessColor} font-semibold">${readinessLabel}</div>
               <p class="text-xs text-gray-600 mt-1">Based on accuracy, SRS progress, study time, and labs.</p>
             </div>
           </div>
@@ -156,27 +156,27 @@ export class StatsView {
           </div>
           <div class="bg-gray-900 border border-gray-700 rounded p-4">
             <h3 class="text-sm text-gray-400 uppercase tracking-widest mb-3">Weak Areas</h3>
-            <div id="weak-area-list" class="space-y-2">\${weakAreaCards}</div>
+            <div id="weak-area-list" class="space-y-2">${weakAreaCards}</div>
           </div>
         </div>
 
         <div class="bg-gray-900 border border-cyan-900 rounded p-5 space-y-3">
           <h3 class="text-sm text-gray-400 uppercase tracking-widest">Study Planner</h3>
           <div class="flex gap-3">
-            <input id="exam-date-input" type="date" value="\${examDateVal}" class="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-white text-sm outline-none">
+            <input id="exam-date-input" type="date" value="${examDateVal}" class="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-white text-sm outline-none">
             <button id="save-exam-date" class="px-4 py-1.5 bg-cyan-800 text-cyan-200 rounded text-sm font-semibold">Save</button>
           </div>
-          \${daysLeft !== null ? \`<div class="text-xs text-cyan-400 font-mono text-center">\${daysLeft} days remaining until exam.</div>\` : ''}
+          ${daysLeft !== null ? `<div class="text-xs text-cyan-400 font-mono text-center">${daysLeft} days remaining until exam.</div>` : ''}
         </div>
 
         <div class="bg-gray-900 border border-gray-700 rounded p-5 space-y-4">
           <h3 class="text-sm text-gray-400 uppercase tracking-widest">Accuracy by Domain</h3>
-          \${domainRows}
+          ${domainRows}
         </div>
 
         <div class="bg-gray-900 border border-gray-700 rounded p-5">
           <h3 class="text-sm text-gray-400 uppercase tracking-widest mb-3">Recent Sessions</h3>
-          \${recentRows}
+          ${recentRows}
         </div>
 
         <div class="bg-gray-900 border border-gray-700 rounded p-5">
@@ -190,7 +190,7 @@ export class StatsView {
             Import Save <input id="import-save-input" type="file" class="hidden">
           </label>
         </div>
-      </div>\`;
+      </div>`;
 
     this._bindEvents();
     
@@ -319,7 +319,7 @@ export class StatsView {
       const key = d.toISOString().slice(0,10);
       const mins = studyLog[key] || 0;
       const color = mins === 0 ? '#111827' : mins < 20 ? '#14532d' : mins < 60 ? '#166534' : '#22c55e';
-      html += \`<div style="width:10px; height:10px; background:\${color}; border-radius:1px;" title="\${key}: \${Math.round(mins)} min"></div>\`;
+      html += `<div style="width:10px; height:10px; background:${color}; border-radius:1px;" title="${key}: ${Math.round(mins)} min"></div>`;
     }
     html += '</div>';
     container.innerHTML = html;

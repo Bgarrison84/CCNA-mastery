@@ -46,15 +46,15 @@ export class FlashView {
     const area = document.getElementById('flash-area');
     area.innerHTML = `
       <div class="bg-gray-900 border border-purple-800 rounded-xl p-8 min-h-[200px] flex flex-col justify-center text-center cursor-pointer" id="flash-card">
-        <div class="text-[10px] text-gray-500 uppercase mb-2">\${q.domain}</div>
-        <div class="text-white text-lg">\${this.state.flipped ? q.correct_answer : q.question}</div>
+        <div class="text-[10px] text-gray-500 uppercase mb-2">${q.domain}</div>
+        <div class="text-white text-lg">${this.state.flipped ? q.correct_answer : q.question}</div>
         <div class="text-xs text-gray-600 mt-4 italic">Click to flip</div>
       </div>
-      \${this.state.flipped ? \`
+      ${this.state.flipped ? `
         <div class="flex gap-4 mt-4">
           <button id="flash-miss" class="flex-1 py-2 bg-red-900 text-white rounded">Missed</button>
           <button id="flash-got" class="flex-1 py-2 bg-green-900 text-white rounded">Got It</button>
-        </div>\` : ''}`;
+        </div>` : ''}`;
 
     document.getElementById('flash-card').onclick = () => {
       this.state.flipped = !this.state.flipped;
@@ -74,7 +74,7 @@ export class FlashView {
   }
 
   renderSummary() {
-    this.containerEl.innerHTML = \`<div class="p-10 text-center"><h2 class="text-2xl text-purple-400">Session Complete</h2><button id="flash-close" class="mt-4 px-6 py-2 bg-gray-800 text-white rounded">Back</button></div>\`;
+    this.containerEl.innerHTML = `<div class="p-10 text-center"><h2 class="text-2xl text-purple-400">Session Complete</h2><button id="flash-close" class="mt-4 px-6 py-2 bg-gray-800 text-white rounded">Back</button></div>`;
     this.containerEl.querySelector('#flash-close').onclick = () => this.render();
   }
 }

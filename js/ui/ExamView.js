@@ -30,16 +30,16 @@ export class ExamView {
       ? examHistory.map((run, i) => {
           const date = new Date(run.date).toLocaleDateString();
           const pass = run.score >= 70;
-          return \`
+          return `
             <div class="exam-hist-row border border-gray-800 rounded px-3 py-2 text-xs flex justify-between items-center">
-              <span class="font-bold \${pass ? 'text-green-400' : 'text-red-400'}">\${pass ? 'PASS' : 'FAIL'}</span>
-              <span class="text-gray-300 font-mono">\${run.score}%</span>
-              <span class="text-gray-500">\${date}</span>
-            </div>\`;
+              <span class="font-bold ${pass ? 'text-green-400' : 'text-red-400'}">${pass ? 'PASS' : 'FAIL'}</span>
+              <span class="text-gray-300 font-mono">${run.score}%</span>
+              <span class="text-gray-500">${date}</span>
+            </div>`;
         }).join('')
       : '<p class="text-gray-600 text-xs py-2 text-center">No exam runs yet.</p>';
 
-    this.containerEl.innerHTML = \`
+    this.containerEl.innerHTML = `
       <div class="max-w-2xl mx-auto p-6 space-y-5">
         <h2 class="text-yellow-400 font-bold text-xl">Exam Simulator</h2>
         <div class="bg-gray-900 border border-yellow-900 rounded p-5 space-y-3">
@@ -49,10 +49,10 @@ export class ExamView {
         </div>
         <div class="bg-gray-900 border border-gray-700 rounded p-5">
           <h3 class="text-sm text-gray-400 uppercase tracking-widest mb-3">Exam History</h3>
-          <div class="space-y-1">\${historyRows}</div>
+          <div class="space-y-1">${historyRows}</div>
         </div>
         <div id="exam-area" class="hidden"></div>
-      </div>\`;
+      </div>`;
 
     this.containerEl.querySelector('#start-exam')?.addEventListener('click', () => this.startExam());
   }
@@ -96,21 +96,21 @@ export class ExamView {
     if (!q) { this.finish(); return; }
 
     const area = document.getElementById('exam-area');
-    area.innerHTML = \`
+    area.innerHTML = `
       <div class="bg-gray-900 border border-gray-700 rounded p-5 mt-4">
         <div class="flex justify-between text-[10px] text-gray-500 mb-2">
-          <span>\${q.domain}</span>
-          <span id="exam-timer" class="font-mono text-yellow-400 font-bold">\${this._formatTime(this.state.secondsLeft)}</span>
-          <span>\${this.state.currentIdx + 1} / \${this.state.session.length}</span>
+          <span>${q.domain}</span>
+          <span id="exam-timer" class="font-mono text-yellow-400 font-bold">${this._formatTime(this.state.secondsLeft)}</span>
+          <span>${this.state.currentIdx + 1} / ${this.state.session.length}</span>
         </div>
-        <div class="text-white text-sm mb-4">\${q.question}</div>
+        <div class="text-white text-sm mb-4">${q.question}</div>
         <div class="space-y-2">
-          \${q.options.map((opt, i) => \`
-            <button data-answer="\${i}" class="exam-opt w-full text-left px-4 py-2 border border-gray-700 rounded text-sm hover:border-yellow-500 transition-colors">
-              \${opt}
-            </button>\`).join('')}
+          ${q.options.map((opt, i) => `
+            <button data-answer="${i}" class="exam-opt w-full text-left px-4 py-2 border border-gray-700 rounded text-sm hover:border-yellow-500 transition-colors">
+              ${opt}
+            </button>`).join('')}
         </div>
-      </div>\`;
+      </div>`;
 
     area.querySelectorAll('.exam-opt').forEach(btn => {
       btn.onclick = () => this.submitAnswer(btn.dataset.answer);
@@ -133,19 +133,19 @@ export class ExamView {
     
     this.store.recordExamRun({ score, correct, total, date: Date.now() });
     
-    this.containerEl.innerHTML = \`
+    this.containerEl.innerHTML = `
       <div class="max-w-md mx-auto p-10 text-center space-y-4">
-        <div class="text-5xl">\${score >= 70 ? '🎉' : '💀'}</div>
-        <h2 class="text-2xl font-bold \${score >= 70 ? 'text-green-400' : 'text-red-400'}">\${score}% - \${score >= 70 ? 'PASSED' : 'FAILED'}</h2>
-        <p class="text-gray-400">You got \${correct} out of \${total} questions correct.</p>
+        <div class="text-5xl">${score >= 70 ? '🎉' : '💀'}</div>
+        <h2 class="text-2xl font-bold ${score >= 70 ? 'text-green-400' : 'text-red-400'}">${score}% - ${score >= 70 ? 'PASSED' : 'FAILED'}</h2>
+        <p class="text-gray-400">You got ${correct} out of ${total} questions correct.</p>
         <button id="exam-close" class="px-6 py-2 bg-gray-800 text-white rounded">Close</button>
-      </div>\`;
+      </div>`;
     this.containerEl.querySelector('#exam-close').onclick = () => this.render();
   }
 
   _formatTime(s) {
     const m = Math.floor(s / 60);
     const rs = s % 60;
-    return \`\${m}:\${rs.toString().padStart(2, '0')}\`;
+    return `${m}:${rs.toString().padStart(2, '0')}`;
   }
 }

@@ -44,11 +44,11 @@ export class GrindView {
           <div class="flex gap-2 text-xs">
             <select id="quiz-domain" class="bg-gray-800 border border-gray-600 text-gray-300 rounded px-2 py-1">
               <option value="all">All Domains</option>
-              \${QuizEngine.domainsFrom(this.content.questions).map(d => \`<option value="\${d}" \${d === presetDomain ? 'selected' : ''}>\${d}</option>\`).join('')}
+              ${QuizEngine.domainsFrom(this.content.questions).map(d => `<option value="${d}" ${d === presetDomain ? 'selected' : ''}>${d}</option>`).join('')}
             </select>
             <select id="quiz-week" class="bg-gray-800 border border-gray-600 text-gray-300 rounded px-2 py-1">
               <option value="all">All Weeks</option>
-              \${[1,2,3,4,5,6].map(w => \`<option value="\${w}" \${String(w) === String(presetWeek) ? 'selected' : ''}>Week \${w}</option>\`).join('')}
+              ${[1,2,3,4,5,6].map(w => `<option value="${w}" ${String(w) === String(presetWeek) ? 'selected' : ''}>Week ${w}</option>`).join('')}
             </select>
             <select id="quiz-difficulty" class="bg-gray-800 border border-gray-600 text-gray-300 rounded px-2 py-1">
               <option value="all">All Difficulties</option>
@@ -77,23 +77,23 @@ export class GrindView {
         </div>
 
         <div class="flex gap-3 text-[11px] font-mono bg-gray-900 border border-gray-700 rounded px-4 py-2">
-          <span class="text-cyan-400">&#9632; New <strong>\${srs.new}</strong></span>
-          <span class="text-yellow-400">&#9632; Due <strong>\${srs.due}</strong></span>
-          <span class="text-blue-400">&#9632; Learning <strong>\${srs.learning}</strong></span>
-          <span class="text-green-500">&#9632; Mastered <strong>\${srs.mastered}</strong></span>
-          <span class="ml-auto text-gray-600">\${allQIds.length} total questions</span>
+          <span class="text-cyan-400">&#9632; New <strong>${srs.new}</strong></span>
+          <span class="text-yellow-400">&#9632; Due <strong>${srs.due}</strong></span>
+          <span class="text-blue-400">&#9632; Learning <strong>${srs.learning}</strong></span>
+          <span class="text-green-500">&#9632; Mastered <strong>${srs.mastered}</strong></span>
+          <span class="ml-auto text-gray-600">${allQIds.length} total questions</span>
         </div>
 
         <div id="quiz-area" class="hidden"></div>
         <div id="quiz-prompt" class="text-center py-12">
-          \${srsTotal > 0
-            ? \`<p class="text-yellow-400 font-semibold">\${srs.due} due · \${srs.new} new</p>
-               <p class="text-gray-400 text-sm mt-1">SRS mode will serve these first.</p>\`
-            : \`<p class="text-green-400 font-semibold">You're all caught up!</p>
-               <p class="text-gray-400 text-sm mt-1">No questions due. Come back tomorrow, or drill any domain below.</p>\`}
+          ${srsTotal > 0
+            ? `<p class="text-yellow-400 font-semibold">${srs.due} due · ${srs.new} new</p>
+               <p class="text-gray-400 text-sm mt-1">SRS mode will serve these first.</p>`
+            : `<p class="text-green-400 font-semibold">You're all caught up!</p>
+               <p class="text-gray-400 text-sm mt-1">No questions due. Come back tomorrow, or drill any domain below.</p>`}
           <p class="text-xs text-gray-600 mt-3">Select a domain and difficulty, then press Start.</p>
         </div>
-      </div>\`;
+      </div>`;
 
     this.containerEl.querySelector('#start-quiz')?.addEventListener('click', () => this.startQuiz());
 
@@ -113,7 +113,7 @@ export class GrindView {
     if (week === 'all' && !window._allWeeksLoaded?.()) {
       const prompt = document.getElementById('quiz-prompt');
       if (prompt) {
-        prompt.innerHTML = \`<div class="text-center py-10"><p class="text-yellow-400">Loading remaining weeks...</p></div>\`;
+        prompt.innerHTML = `<div class="text-center py-10"><p class="text-yellow-400">Loading remaining weeks...</p></div>`;
       }
       window._ensureAllWeeksLoaded?.().then(() => this.startQuiz());
       return;
@@ -138,7 +138,7 @@ export class GrindView {
       const prompt = document.getElementById('quiz-prompt');
       if (prompt) {
         prompt.classList.remove('hidden');
-        prompt.innerHTML = \`<p class="text-yellow-400 py-10">No questions match these filters</p>\`;
+        prompt.innerHTML = `<p class="text-yellow-400 py-10">No questions match these filters</p>`;
       }
       return;
     }
@@ -206,26 +206,26 @@ export class GrindView {
 
     const { current, total } = this.quiz.progress;
     area.classList.remove('hidden');
-    area.innerHTML = \`
+    area.innerHTML = `
       <div class="space-y-4">
         <div class="flex items-center justify-between text-[10px] font-mono text-gray-500 uppercase tracking-widest">
-          <div>Question \${current} / \${total}</div>
-          <div>\${q.domain} \${q._custom ? '<span class="text-blue-400 ml-2">✏️ Custom</span>' : ''}</div>
+          <div>Question ${current} / ${total}</div>
+          <div>${q.domain} ${q._custom ? '<span class="text-blue-400 ml-2">✏️ Custom</span>' : ''}</div>
         </div>
 
         <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
-          \${q.scenario_text ? \`<div class="text-xs text-gray-500 mb-3 italic bg-black/30 p-3 rounded border border-gray-800">\${q.scenario_text}</div>\` : ''}
-          <div class="text-green-100 leading-relaxed font-semibold">\${q.question}</div>
+          ${q.scenario_text ? `<div class="text-xs text-gray-500 mb-3 italic bg-black/30 p-3 rounded border border-gray-800">${q.scenario_text}</div>` : ''}
+          <div class="text-green-100 leading-relaxed font-semibold">${q.question}</div>
 
           <div id="quiz-options" class="mt-6 space-y-2">
-            \${q.options.map((opt, i) => \`
-              <button data-idx="\${i}" class="quiz-opt w-full text-left px-4 py-3 rounded border border-gray-700 hover:border-green-500 transition-colors text-sm text-gray-300">
-                \${opt}
-              </button>\`).join('')}
+            ${q.options.map((opt, i) => `
+              <button data-idx="${i}" class="quiz-opt w-full text-left px-4 py-3 rounded border border-gray-700 hover:border-green-500 transition-colors text-sm text-gray-300">
+                ${opt}
+              </button>`).join('')}
           </div>
           <div id="quiz-feedback" class="hidden mt-4 p-3 rounded text-sm font-mono"></div>
         </div>
-      </div>\`;
+      </div>`;
 
     area.querySelectorAll('.quiz-opt').forEach(btn => {
       btn.onclick = () => this.handleAnswer(parseInt(btn.dataset.idx));
@@ -269,10 +269,10 @@ export class GrindView {
       fb.className = fb.className.replace('hidden', '').trim();
       if (isCorrect) {
         fb.className += ' border border-green-800 bg-green-900/30 text-green-300';
-        fb.innerHTML = \`<span class="font-bold text-green-400">✓ Correct!</span>\${q.explanation ? \` <span class="text-green-200">\${q.explanation}</span>\` : ''}\`;
+        fb.innerHTML = `<span class="font-bold text-green-400">✓ Correct!</span>${q.explanation ? ` <span class="text-green-200">${q.explanation}</span>` : ''}`;
       } else {
         fb.className += ' border border-red-800 bg-red-900/20 text-red-300';
-        fb.innerHTML = \`<span class="font-bold text-red-400">✗ Incorrect.</span> <span class="text-gray-400">Correct: <span class="text-green-300">\${q.options[correctIdx]}</span></span>\${q.explanation ? \`<br><span class="text-gray-500 text-xs">\${q.explanation}</span>\` : ''}\`;
+        fb.innerHTML = `<span class="font-bold text-red-400">✗ Incorrect.</span> <span class="text-gray-400">Correct: <span class="text-green-300">${q.options[correctIdx]}</span></span>${q.explanation ? `<br><span class="text-gray-500 text-xs">${q.explanation}</span>` : ''}`;
       }
     }
   }
@@ -282,13 +282,13 @@ export class GrindView {
     const correct = history.filter(r => r.correct).length;
     const total   = history.length;
     const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
-    this.containerEl.innerHTML = \`
+    this.containerEl.innerHTML = `
       <div class="max-w-xl mx-auto p-10 text-center space-y-4">
         <h2 class="text-2xl text-green-400 font-bold">Session Complete</h2>
-        <div class="text-5xl font-black \${pct >= 70 ? 'text-green-400' : 'text-yellow-400'}">\${pct}%</div>
-        <div class="text-gray-400 text-sm">\${correct} / \${total} correct</div>
+        <div class="text-5xl font-black ${pct >= 70 ? 'text-green-400' : 'text-yellow-400'}">${pct}%</div>
+        <div class="text-gray-400 text-sm">${correct} / ${total} correct</div>
         <button id="back-to-grind" class="mt-4 px-6 py-2 bg-green-700 hover:bg-green-600 text-white rounded font-semibold">Back to Grind</button>
-      </div>\`;
+      </div>`;
     this.containerEl.querySelector('#back-to-grind').onclick = () => this.render();
   }
 }

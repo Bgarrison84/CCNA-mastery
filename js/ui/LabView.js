@@ -25,12 +25,12 @@ export class LabView {
           <h2 class="text-green-400 font-bold text-sm uppercase tracking-widest mb-2">Labs</h2>
           ${labs.map(lab => {
             const done = state.completedLabs.find(l => l.id === lab.id);
-            return \`<button data-lab="\${lab.id}" class="lab-btn text-left px-3 py-2 rounded border \${done ? 'border-green-700 bg-green-900/30 text-green-300' : 'border-gray-700 hover:border-green-600 text-gray-300'} text-xs transition-colors">
-              <div class="font-semibold">\${lab.title}</div>
-              <div class="text-gray-500 mt-0.5">Week \${lab.week} · \${lab.difficulty} · \${lab.xpReward}XP\${done ? ' ✓' : ''}</div>
-            </button>\`;
+            return `<button data-lab="${lab.id}" class="lab-btn text-left px-3 py-2 rounded border ${done ? 'border-green-700 bg-green-900/30 text-green-300' : 'border-gray-700 hover:border-green-600 text-gray-300'} text-xs transition-colors">
+              <div class="font-semibold">${lab.title}</div>
+              <div class="text-gray-500 mt-0.5">Week ${lab.week} · ${lab.difficulty} · ${lab.xpReward}XP${done ? ' ✓' : ''}</div>
+            </button>`;
           }).join('')}
-          \${!labs.length ? '<p class="text-gray-500 text-xs">Complete Story Mode to unlock labs.</p>' : ''}
+          ${!labs.length ? '<p class="text-gray-500 text-xs">Complete Story Mode to unlock labs.</p>' : ''}
         </div>
 
         <!-- Terminal -->
@@ -45,7 +45,7 @@ export class LabView {
             <div class="ml-auto flex gap-2">
               <button id="btn-validate" class="px-3 py-1 text-xs bg-green-800 hover:bg-green-700 text-green-200 rounded hidden">validate</button>
               <button id="btn-reset"    class="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded hidden">reset</button>
-              <button id="btn-hint"     class="px-3 py-1 text-xs bg-yellow-800 hover:bg-yellow-700 text-yellow-200 rounded hidden">hint (<span id="hint-count">\${state.hints}</span>)</button>
+              <button id="btn-hint"     class="px-3 py-1 text-xs bg-yellow-800 hover:bg-yellow-700 text-yellow-200 rounded hidden">hint (<span id="hint-count">${state.hints}</span>)</button>
             </div>
           </div>
           <!-- Device switcher — only shown for multi-device labs -->
@@ -66,7 +66,7 @@ export class LabView {
           <h3 class="text-green-400 font-bold text-sm mb-2 uppercase tracking-widest">Validation</h3>
           <div id="validation-results" class="space-y-1 text-xs font-mono"></div>
         </div>
-      </div>\`;
+      </div>`;
 
     // Init terminal
     this.terminal = new Terminal({
@@ -113,7 +113,7 @@ export class LabView {
       if (!lab?.hints?.length) return;
       const idx  = Math.min(this.store.state.hints, lab.hints.length - 1);
       this.store.useHint();
-      alert(\`Hint: \${lab.hints[idx] || 'No more hints.'}\`);
+      alert(`Hint: ${lab.hints[idx] || 'No more hints.'}`);
       document.getElementById('hint-count').textContent = this.store.state.hints;
     });
   }
@@ -163,17 +163,17 @@ export class LabView {
           const btn = document.createElement('button');
           btn.textContent = name;
           btn.dataset.device = name;
-          btn.className = \`device-tab px-2 py-0.5 text-xs rounded font-mono border \${
+          btn.className = `device-tab px-2 py-0.5 text-xs rounded font-mono border ${
             name === this.terminal.activeDevice
               ? 'border-green-500 text-green-300 bg-green-900/30'
-              : 'border-gray-600 text-gray-400 hover:border-green-600'}\`;
+              : 'border-gray-600 text-gray-400 hover:border-green-600'}`;
           btn.addEventListener('click', () => {
             this.terminal.switchDevice(name);
             switcher.querySelectorAll('.device-tab').forEach(b => {
               const active = b.dataset.device === this.terminal.activeDevice;
-              b.className = \`device-tab px-2 py-0.5 text-xs rounded font-mono border \${
+              b.className = `device-tab px-2 py-0.5 text-xs rounded font-mono border ${
                 active ? 'border-green-500 text-green-300 bg-green-900/30'
-                       : 'border-gray-600 text-gray-400 hover:border-green-600'}\`;
+                       : 'border-gray-600 text-gray-400 hover:border-green-600'}`;
             });
           });
           switcher.appendChild(btn);
@@ -194,10 +194,10 @@ export class LabView {
     results.innerHTML = '';
 
     const header = document.createElement('div');
-    header.className = \`font-bold mb-2 \${result.pass ? 'text-green-400' : 'text-red-400'}\`;
+    header.className = `font-bold mb-2 ${result.pass ? 'text-green-400' : 'text-red-400'}`;
     header.textContent = result.pass
-      ? \`PASS — Score: \${result.score}%\`
-      : \`FAIL — Score: \${result.score}%\`;
+      ? `PASS — Score: ${result.score}%`
+      : `FAIL — Score: ${result.score}%`;
     results.appendChild(header);
 
     if (result.pass) {
@@ -209,7 +209,7 @@ export class LabView {
       result.missing.forEach(msg => {
         const el = document.createElement('div');
         el.className = 'text-red-300 border-l-2 border-red-700 pl-2 py-0.5';
-        el.textContent = \`✗ \${msg}\`;
+        el.textContent = `✗ ${msg}`;
         results.appendChild(el);
       });
     }
