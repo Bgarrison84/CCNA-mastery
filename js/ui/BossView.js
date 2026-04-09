@@ -142,7 +142,7 @@ export class BossView {
     vibrate(this.store, result.correct ? 50 : [100, 50, 100]);
     playSound(result.correct ? 'correct' : 'bossHit', this.store);
     if (result.correct) this._correctStreak++;
-    else this._correctStreak = 0;
+    else { this._correctStreak = 0; bus.emit('boss:wrong'); }
 
     // Boss taunt
     const bossId = this.boss.bossData?.id || '';
@@ -166,7 +166,7 @@ export class BossView {
     if (hpBar) hpBar.style.width = this.boss.hp + '%';
 
     if (result.done) {
-      if (result.victory) { vibrate(this.store, 300); playSound('victory', this.store); }
+      if (result.victory) { vibrate(this.store, 300); playSound('victory', this.store); bus.emit('boss:victory'); }
       setTimeout(() => this.renderEnd(result), 1500);
     } else {
       setTimeout(() => this.renderQuestion(), 1500);

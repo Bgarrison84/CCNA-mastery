@@ -8,7 +8,7 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v17';
+const CACHE_VERSION = 'ccna-v18';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
@@ -38,6 +38,7 @@ const PRECACHE_URLS = [
   './js/ui/BossView.js',
   './js/ui/SubnetView.js',
   './js/ui/ReferenceView.js',
+  './js/ui/CharacterWidget.js',
   './js/ui/FlashView.js',
   './js/utils/ui.js',
   './js/utils/sound.js',

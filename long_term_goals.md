@@ -55,7 +55,7 @@ protocol where routers share full topology maps to calculate the shortest path."
 
 ---
 
-## 3. Moving Character Animation (Story Progression)
+## 3. Moving Character Animation (Story Progression) ✓ DONE 2026-04-09
 
 **Concept:**
 A side-scrolling or walking character animation that plays as the learner progresses

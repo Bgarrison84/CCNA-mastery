@@ -3,35 +3,51 @@
  */
 import { bus } from '../core/EventBus.js';
 import { glossarize } from '../utils/glossary.js';
+import { CharacterWidget } from './CharacterWidget.js';
 
 export class StoryMode {
   constructor(content, store, containerEl) {
-    this.content     = content;
-    this.beats       = content.storyBeats || [];
-    this.store       = store;
-    this.containerEl = containerEl;
+    this.content      = content;
+    this.beats        = content.storyBeats || [];
+    this.store        = store;
+    this.containerEl  = containerEl;
     this._typingTimer = null;
+    this._charWidget  = null;
   }
 
   /** Main entry point for rendering the Story/Home view. */
   render() {
+    // Destroy old character widget before re-rendering
+    this._charWidget?.destroy();
+    this._charWidget = null;
+
     this.containerEl.innerHTML = `
       <div class="max-w-3xl mx-auto">
         <div id="week-timeline" class="px-6 pt-5 pb-1"></div>
+        <div id="char-road" class="px-6 pb-2"></div>
         <div id="mission-card" class="px-6 pb-1"></div>
         <div id="daily-challenge-card" class="px-6 pb-1"></div>
         <div id="weak-card" class="px-6 pb-1"></div>
         <div id="story-container" class="p-6"></div>
       </div>`;
-    
+
     this._renderWeekTimeline();
+    this._renderCharacter();
     this._renderMissionCard();
     this._renderDailyChallenge();
     this._renderWeakCard();
-    
+
     // The actual story beat container
     this.storyContainer = this.containerEl.querySelector('#story-container');
     this.showCurrentBeat();
+  }
+
+  _renderCharacter() {
+    const el = this.containerEl.querySelector('#char-road');
+    if (!el) return;
+    if (this.store.state.settings?.characterAnim === false) return;
+    this._charWidget = new CharacterWidget(el, this.store, this.beats);
+    this._charWidget.render();
   }
 
   // ─── Timeline & Dashboard Cards ────────────────────────────────────────────
@@ -347,7 +363,10 @@ export class StoryMode {
     const state = this.store.state;
     const weekBeats = this.beats.filter(b => b.week === beat.week && !(b.branchOf && !state.storyProgress[b.id]?.seen));
     const allSeen = weekBeats.every(b => state.storyProgress[b.id]?.seen);
-    if (allSeen && beat.week === state.currentWeek) this.store.advanceWeek();
+    if (allSeen && beat.week === state.currentWeek) {
+      this.store.advanceWeek();
+      bus.emit('story:week_advance', { week: beat.week });
+    }
     setTimeout(() => this.showCurrentBeat(), 300);
   }
 

@@ -122,13 +122,15 @@ window._allWeeksLoaded = () => true;
 // ─── Accessibility Init ───────────────────────────────────────────────────────
 
 function initAccessibility() {
-  const hapticEl   = document.getElementById('haptic-toggle');
-  const dyslexiaEl = document.getElementById('dyslexia-toggle');
-  const sfxEl      = document.getElementById('sfx-toggle');
+  const hapticEl    = document.getElementById('haptic-toggle');
+  const dyslexiaEl  = document.getElementById('dyslexia-toggle');
+  const sfxEl       = document.getElementById('sfx-toggle');
+  const characterEl = document.getElementById('character-toggle');
 
-  if (hapticEl)   hapticEl.checked   = store.state.settings?.haptic ?? true;
-  if (dyslexiaEl) dyslexiaEl.checked = store.state.settings?.dyslexiaFont ?? false;
-  if (sfxEl)      sfxEl.checked      = store.state.settings?.sfxEnabled ?? true;
+  if (hapticEl)    hapticEl.checked    = store.state.settings?.haptic ?? true;
+  if (dyslexiaEl)  dyslexiaEl.checked  = store.state.settings?.dyslexiaFont ?? false;
+  if (sfxEl)       sfxEl.checked       = store.state.settings?.sfxEnabled ?? true;
+  if (characterEl) characterEl.checked = store.state.settings?.characterAnim ?? true;
 
   // Apply stored dyslexia font on load
   if (store.state.settings?.dyslexiaFont) document.body.classList.add('dyslexia-font');
@@ -141,6 +143,12 @@ function initAccessibility() {
   });
 
   sfxEl?.addEventListener('change', () => store.setSetting('sfxEnabled', sfxEl.checked));
+
+  characterEl?.addEventListener('change', () => {
+    store.setSetting('characterAnim', characterEl.checked);
+    // Re-render story view if active so widget appears/disappears immediately
+    if (router?.currentView === 'story') window.switchView('story');
+  });
 
   // SW update notification — fires when controllerchange indicates a new SW took over
   window.addEventListener('sw:update-ready', () => {
