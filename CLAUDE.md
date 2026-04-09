@@ -14,4 +14,4 @@ Source: GEMINI.md backlog. Work through in order, one per session.
 
 ### Infrastructure
 7. [x] **Tailwind Post-Compilation** *(done 2026-04-09)* — Deleted 398K runtime `tailwind.js`; `app.css` (37K compiled) already linked. Run `npm run build:css` after class changes.
-8. [ ] **Vitest Unit Testing** — Implement automated tests for `Subnetting.js` and `Store.js` logic.
+8. [x] **Vitest Unit Testing** *(done 2026-04-09)* — 72 tests passing: 28 for `Subnetting.js` (solveSubnet, validateIPv4, VLSM, IPv6, buildChallenge) and 44 for `Store.js` (XP/levelling, SRS, mistakes, flags, inventory). Run `npm test`.
