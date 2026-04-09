@@ -138,15 +138,39 @@ function initAccessibility() {
 
   sfxEl?.addEventListener('change', () => store.setSetting('sfxEnabled', sfxEl.checked));
 
-  // SW update notification
+  // SW update notification — fires when controllerchange indicates a new SW took over
   window.addEventListener('sw:update-ready', () => {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-    const div = document.createElement('div');
-    div.className = 'bg-blue-900 border border-blue-600 text-blue-200 rounded px-3 py-2 text-xs max-w-xs shadow-lg cursor-pointer';
-    div.innerHTML = 'Update available — <u>tap to reload</u>';
-    div.addEventListener('click', () => window.location.reload());
-    container.appendChild(div);
+    // Remove any existing update banner first (shouldn't happen, but be safe)
+    document.getElementById('sw-update-banner')?.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'sw-update-banner';
+    banner.style.cssText = [
+      'position:fixed', 'bottom:72px', 'left:50%', 'transform:translateX(-50%)',
+      'z-index:9999', 'display:flex', 'align-items:center', 'gap:10px',
+      'padding:10px 16px', 'border-radius:8px', 'box-shadow:0 4px 20px rgba(0,0,0,0.6)',
+      'background:#1e3a5f', 'border:1px solid #3b82f6', 'color:#93c5fd',
+      'font-family:monospace', 'font-size:0.75rem', 'cursor:pointer',
+      'white-space:nowrap', 'max-width:90vw',
+    ].join(';');
+    banner.innerHTML = `
+      <span style="font-size:1rem;">🔄</span>
+      <span>New version available</span>
+      <button style="
+        padding:4px 12px; border-radius:4px; background:#3b82f6; border:none;
+        color:#fff; font-family:monospace; font-size:0.72rem; cursor:pointer; font-weight:700;
+      ">Reload</button>
+      <button id="sw-banner-dismiss" style="
+        background:transparent; border:none; color:#6b7280;
+        cursor:pointer; font-size:1rem; line-height:1; padding:0 2px;
+      " aria-label="Dismiss">✕</button>`;
+
+    document.body.appendChild(banner);
+
+    banner.querySelector('button:not(#sw-banner-dismiss)')
+      .addEventListener('click', () => window.location.reload());
+    banner.querySelector('#sw-banner-dismiss')
+      .addEventListener('click', e => { e.stopPropagation(); banner.remove(); });
   });
 }
 

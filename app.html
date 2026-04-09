@@ -859,18 +859,21 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js')
-        .then(reg => {
-          // Notify main.js when a new service worker is waiting
-          reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            newWorker?.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                window.dispatchEvent(new CustomEvent('sw:update-ready'));
-              }
-            });
-          });
-        })
         .catch(err => console.warn('[SW] Registration failed:', err));
+
+      // controllerchange fires when a new SW (that called skipWaiting) takes over.
+      // This is more reliable than statechange==='installed' because the SW calls
+      // skipWaiting() during install, so it never pauses in the 'installed' state.
+      let _swFirstControl = !navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_swFirstControl) {
+          // First time a SW takes control (fresh install) — no toast needed.
+          _swFirstControl = false;
+          return;
+        }
+        // A new SW replaced the old one — notify the app to show the update banner.
+        window.dispatchEvent(new CustomEvent('sw:update-ready'));
+      });
     });
   }
 
