@@ -51,7 +51,8 @@ export class ReferenceView {
       { id: 'dhcp',          title: 'DHCP — DORA Flow & Relay Agent'      },
       { id: 'arp',           title: 'ARP — Resolution, GARP & Cache'      },
       { id: 'dns',           title: 'DNS — Recursive vs Iterative'        },
-      { id: 'stp_timeline',  title: 'STP — State Timeline & RSTP'         },
+      { id: 'stp_timeline',       title: 'STP — State Timeline & RSTP'         },
+      { id: 'practice_terminal', title: 'Beginner CLI Practice Labs'           },
     ];
 
     list.innerHTML = SECTIONS.map(s => `

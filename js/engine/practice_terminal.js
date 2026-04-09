@@ -416,3 +416,55 @@ export class PracticeTerminal {
     this._onComplete({ xp: this._lab.xp });
   }
 }
+
+// ── Diagram-compatible render() export ────────────────────────────────────────
+// Called by window.renderDiagram('practice_terminal', container).
+// Shows a lab-picker then launches PracticeTerminal for the chosen lab.
+
+export function render(containerEl) {
+  const labs = Object.entries(PRACTICE_LABS).map(([id, lab]) => ({ id, ...lab }));
+  let active = null;
+
+  function showPicker() {
+    containerEl.innerHTML = `
+      <div style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;background:#0a0a0f;border:1px solid #1f2937;border-radius:8px;padding:16px;color:#c8ffc8;">
+        <div style="font-weight:700;color:#30d158;margin-bottom:10px;">◈ BEGINNER CLI LABS — choose a lab to practice:</div>
+        <div style="display:flex;flex-direction:column;gap:8px;" id="pt-picker">
+          ${labs.map(l => `
+            <button class="pt-pick-btn" data-id="${l.id}" style="
+              text-align:left;padding:10px 14px;border-radius:6px;cursor:pointer;
+              background:#0d1117;border:1px solid #30d158;color:#c9d1d9;
+              font-family:monospace;font-size:0.72rem;transition:background .15s;">
+              <div style="color:#30d158;font-weight:700;margin-bottom:2px;">${l.title}</div>
+              <div style="color:#6b7280;font-size:0.65rem;">${l.description} · +${l.xp} XP</div>
+            </button>`).join('')}
+        </div>
+      </div>`;
+
+    containerEl.querySelectorAll('.pt-pick-btn').forEach(btn => {
+      btn.addEventListener('mouseenter', () => btn.style.background = '#111827');
+      btn.addEventListener('mouseleave', () => btn.style.background = '#0d1117');
+      btn.addEventListener('click', () => launchLab(btn.dataset.id));
+    });
+  }
+
+  function launchLab(labId) {
+    containerEl.innerHTML = '';
+    active = new PracticeTerminal(containerEl, labId, {
+      onComplete: ({ xp }) => {
+        document.dispatchEvent(new CustomEvent('ccna-xp', { detail: { amount: xp, reason: `Practice CLI: ${labId}` } }));
+        // Show "Try another" link after a brief pause
+        setTimeout(() => {
+          const link = document.createElement('div');
+          link.style.cssText = 'margin-top:10px;text-align:center;font-family:monospace;font-size:0.7rem;';
+          link.innerHTML = `<button style="background:transparent;border:1px solid #374151;color:#6b7280;border-radius:4px;padding:4px 12px;cursor:pointer;font-family:monospace;" id="pt-another">Try another lab</button>`;
+          containerEl.appendChild(link);
+          link.querySelector('#pt-another').addEventListener('click', () => { active = null; showPicker(); });
+        }, 600);
+      },
+    });
+    active.start();
+  }
+
+  showPicker();
+}
