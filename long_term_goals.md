@@ -5,7 +5,7 @@ Not scheduled for any current phase. Revisit when the core feature set is stable
 
 ---
 
-## 1. Visual Traceroute Animation
+## 1. Visual Traceroute Animation ✓ DONE 2026-04-09
 
 **Concept:**
 After a student completes a routing or multi-hop lab, a packet animation plays across an

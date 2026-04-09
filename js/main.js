@@ -50,6 +50,7 @@ const DIAGRAM_MODULES = {
   dns:           './js/diagrams/dns.js',
   stp_timeline:     './js/diagrams/stp_timeline.js',
   practice_terminal: './js/engine/practice_terminal.js',
+  traceroute:        './js/diagrams/traceroute.js',
 };
 
 window.renderDiagram = async function(id, container) {

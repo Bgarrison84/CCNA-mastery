@@ -53,6 +53,7 @@ export class ReferenceView {
       { id: 'dns',           title: 'DNS — Recursive vs Iterative'        },
       { id: 'stp_timeline',       title: 'STP — State Timeline & RSTP'         },
       { id: 'practice_terminal', title: 'Beginner CLI Practice Labs'           },
+      { id: 'traceroute',        title: 'Visual Traceroute — Packet Path Animation' },
     ];
 
     list.innerHTML = SECTIONS.map(s => `

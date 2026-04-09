@@ -24,7 +24,7 @@ Source: GEMINI.md backlog. Work through in order, one per session.
 ## Long-Term Goals (from long_term_goals.md)
 
 ### LTG-1: Visual Traceroute Animation
-- [ ] Packet hop-by-hop animation after routing labs; failure point from validate() result.
+- [x] **Done 2026-04-09** — `js/diagrams/traceroute.js`: SVG topology (PC1→R1→R2→R3→Server), animated glowing packet with CSS transitions, hop-by-hop routing decision panel, click-router routing-table inspector, Sabotage R2 mode (removes 172.16.4.0/24 route → ICMP unreachable + explosion animation), success flash. SW ccna-v17.
 
 ### LTG-2: Glossary Hover-Over
 - [x] **Done 2026-04-09** — `js/utils/glossary.js`: 100+ CCNA terms; `glossarize(text)` converts plain text → HTML with `<abbr class="g-term" data-def="...">` tags. `initGlossary()` injects CSS + singleton tooltip div + event delegation (hover + tap). Applied to: quiz explanations (GrindView), story dialogue (StoryMode `_typeText`), story concept explanations, practice terminal step explanations. SW bumped to ccna-v16.
