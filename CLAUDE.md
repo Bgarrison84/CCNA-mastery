@@ -13,5 +13,5 @@ Source: GEMINI.md backlog. Work through in order, one per session.
 6. [x] **PWA "Install" Prompt** *(done 2026-04-08)* — Improved custom UI to encourage home-screen installation.
 
 ### Infrastructure
-7. [ ] **Tailwind Post-Compilation** — Move from runtime `tailwind.js` to a compiled CSS build to reduce initial payload by 1MB+.
+7. [x] **Tailwind Post-Compilation** *(done 2026-04-09)* — Deleted 398K runtime `tailwind.js`; `app.css` (37K compiled) already linked. Run `npm run build:css` after class changes.
 8. [ ] **Vitest Unit Testing** — Implement automated tests for `Subnetting.js` and `Store.js` logic.
