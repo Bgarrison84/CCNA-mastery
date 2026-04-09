@@ -20,3 +20,14 @@ Source: GEMINI.md backlog. Work through in order, one per session.
 9. [x] **Infinite Subnetting Speed Drill** — Upgraded `SubnetView.js` with Calculator + Speed Drill tabs. Drill mode: timed, difficulty-selectable (Easy/Medium/Hard/Speed Run), per-field feedback, streak tracking, +25 XP per problem, +100 XP Speed Run bonus. Persists stats to localStorage.
 10. [x] **Multi-Device CLI Topology** — New `js/diagrams/topology.js`: simulated 4-device topology (PC1 → R1 → R2 → Server). Commands: `ping`, `traceroute`, `telnet`, `ssh`, `show arp`, `show ip interface brief`, `show ip route`, `show running-config`, `show version`. Device context switching via `telnet`/`exit`. Click topology icons to jump between devices. Added to Reference view and DIAGRAM_MODULES.
 11. [x] **Practice Terminal as Diagram Module** *(done 2026-04-09)* — Added `render()` export to `practice_terminal.js`; registered as `practice_terminal` in `DIAGRAM_MODULES` (main.js) and Reference view SECTIONS. Lab-picker shows `intro_modes` + `intro_interface` with "Try another" flow and `ccna-xp` CustomEvent on completion.
+
+## Long-Term Goals (from long_term_goals.md)
+
+### LTG-1: Visual Traceroute Animation
+- [ ] Packet hop-by-hop animation after routing labs; failure point from validate() result.
+
+### LTG-2: Glossary Hover-Over
+- [x] **Done 2026-04-09** — `js/utils/glossary.js`: 100+ CCNA terms; `glossarize(text)` converts plain text → HTML with `<abbr class="g-term" data-def="...">` tags. `initGlossary()` injects CSS + singleton tooltip div + event delegation (hover + tap). Applied to: quiz explanations (GrindView), story dialogue (StoryMode `_typeText`), story concept explanations, practice terminal step explanations. SW bumped to ccna-v16.
+
+### LTG-3: Moving Character Animation
+- [ ] CSS/SVG walking character in Story Mode tied to 6-week progress arc.

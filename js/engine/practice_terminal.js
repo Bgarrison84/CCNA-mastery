@@ -1,5 +1,6 @@
 /**
  * practice_terminal.js — Beginner Ghost-Text CLI Introduction
+ * Imports glossarize so step explanations have hover-over definitions.
  *
  * A lightweight, self-contained terminal for the first 1–2 labs in the Labs view.
  * Designed for learners who have never used a CLI before.
@@ -21,6 +22,8 @@
  * To flag a lab as beginner-ghost in the main content, set `beginner_ghost: true`
  * and `practice_lab_id: 'intro_modes'` (or 'intro_interface') on the lab object.
  */
+
+import { glossarize } from '../utils/glossary.js';
 
 // ── Lab definitions ───────────────────────────────────────────────────────────
 
@@ -362,8 +365,8 @@ export class PracticeTerminal {
     void terminal.offsetWidth;
     terminal.classList.add('pt-flash-green');
 
-    // Show explanation
-    this._explanEl.textContent = step.explanation;
+    // Show explanation with glossary hover-overs
+    this._explanEl.innerHTML = glossarize(step.explanation);
     this._explanEl.style.display = 'block';
 
     // Hide hint

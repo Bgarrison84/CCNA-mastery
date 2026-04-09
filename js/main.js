@@ -3,10 +3,11 @@
  * Bootstraps the Store, HUD, and Router.
  */
 
-import { Store }       from './core/Store.js';
-import { HUD }         from './ui/HUD.js';
-import { Router }      from './ui/Router.js';
-import { showToast }   from './utils/ui.js';
+import { Store }         from './core/Store.js';
+import { HUD }           from './ui/HUD.js';
+import { Router }        from './ui/Router.js';
+import { showToast }     from './utils/ui.js';
+import { initGlossary }  from './utils/glossary.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ async function init() {
     router.switchView('story');
 
     initAccessibility();
+    initGlossary();
     document.body.classList.remove('loading');
   } catch (err) {
     console.error('[init] Critical failure:', err);

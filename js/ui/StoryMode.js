@@ -2,6 +2,7 @@
  * StoryMode.js — 6-Week Narrative Engine & Home View
  */
 import { bus } from '../core/EventBus.js';
+import { glossarize } from '../utils/glossary.js';
 
 export class StoryMode {
   constructor(content, store, containerEl) {
@@ -248,7 +249,7 @@ export class StoryMode {
             <span class="story-concept-caret text-green-600 text-xs">▶</span>
           </button>
           <div class="story-concept-panel hidden px-3 py-3 bg-black/60">
-            ${beat.concept_visual.explanation ? `<p class="text-xs text-gray-400 mb-3 leading-relaxed">${beat.concept_visual.explanation}</p>` : ''}
+            ${beat.concept_visual.explanation ? `<p class="text-xs text-gray-400 mb-3 leading-relaxed">${glossarize(beat.concept_visual.explanation)}</p>` : ''}
             <div class="story-diagram-container"></div>
           </div>
         </div>` : ''}
@@ -303,6 +304,11 @@ export class StoryMode {
     if (!el) return;
     clearTimeout(this._typingTimer);
 
+    const finish = () => {
+      el.innerHTML = glossarize(el.textContent);
+      onComplete?.();
+    };
+
     let i = 0;
     el.textContent = '';
     const speed = 18;
@@ -312,14 +318,14 @@ export class StoryMode {
         el.textContent += text[i++];
         this._typingTimer = setTimeout(type, speed);
       } else {
-        onComplete?.();
+        finish();
       }
     };
 
     el.addEventListener('click', () => {
       clearTimeout(this._typingTimer);
       el.textContent = text;
-      onComplete?.();
+      finish();
     }, { once: true });
 
     type();

@@ -31,7 +31,7 @@ A tooltip indicates what went wrong at that hop.
 
 ---
 
-## 2. Glossary Hover-Over (Inline Definitions)
+## 2. Glossary Hover-Over (Inline Definitions) ✓ DONE 2026-04-09
 
 **Concept:**
 Technical terms throughout the app (in question text, story beats, lab descriptions,

@@ -5,6 +5,7 @@ import { QuizEngine } from '../engine/QuizEngine.js';
 import { bus } from '../core/EventBus.js';
 import { vibrate } from '../utils/ui.js';
 import { playSound } from '../utils/sound.js';
+import { glossarize } from '../utils/glossary.js';
 
 export class GrindView {
   constructor(content, store, containerEl) {
@@ -271,10 +272,10 @@ export class GrindView {
       fb.className = fb.className.replace('hidden', '').trim();
       if (isCorrect) {
         fb.className += ' border border-green-800 bg-green-900/30 text-green-300';
-        fb.innerHTML = `<span class="font-bold text-green-400">✓ Correct!</span>${q.explanation ? ` <span class="text-green-200">${q.explanation}</span>` : ''}`;
+        fb.innerHTML = `<span class="font-bold text-green-400">✓ Correct!</span>${q.explanation ? ` <span class="text-green-200">${glossarize(q.explanation)}</span>` : ''}`;
       } else {
         fb.className += ' border border-red-800 bg-red-900/20 text-red-300';
-        fb.innerHTML = `<span class="font-bold text-red-400">✗ Incorrect.</span> <span class="text-gray-400">Correct: <span class="text-green-300">${q.options[correctIdx]}</span></span>${q.explanation ? `<br><span class="text-gray-500 text-xs">${q.explanation}</span>` : ''}`;
+        fb.innerHTML = `<span class="font-bold text-red-400">✗ Incorrect.</span> <span class="text-gray-400">Correct: <span class="text-green-300">${q.options[correctIdx]}</span></span>${q.explanation ? `<br><span class="text-gray-500 text-xs">${glossarize(q.explanation)}</span>` : ''}`;
       }
     }
   }
