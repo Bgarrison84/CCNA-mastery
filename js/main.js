@@ -44,6 +44,10 @@ const DIAGRAM_MODULES = {
   subnetting:    './js/diagrams/subnetting.js',
   encapsulation: './js/diagrams/encapsulation.js',
   topology:      './js/diagrams/topology.js',
+  dhcp:          './js/diagrams/dhcp.js',
+  arp:           './js/diagrams/arp.js',
+  dns:           './js/diagrams/dns.js',
+  stp_timeline:  './js/diagrams/stp_timeline.js',
 };
 
 window.renderDiagram = async function(id, container) {

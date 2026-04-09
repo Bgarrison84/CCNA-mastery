@@ -3504,9 +3504,9 @@
         }
       ],
       "concept_visual": {
-        "title": "Ethernet Frames & MAC Learning",
-        "explanation": "Explore the Ethernet frame structure then watch how a switch builds its MAC address table through learning, flooding, and forwarding. Use the matching challenge to cement the EtherTypes.",
-        "diagramId": "ethernet"
+        "title": "ARP Resolution & Cache",
+        "explanation": "Before a switch can forward a frame, a host must resolve the destination MAC via ARP. Step through the broadcast request, unicast reply, and the resulting ARP cache entry.",
+        "diagramId": "arp"
       }
     },
     {
@@ -3951,7 +3951,12 @@
           "xpReward": 10,
           "next": "w2_vlan_concept"
         }
-      ]
+      ],
+      "concept_visual": {
+        "title": "STP Port State Timeline",
+        "explanation": "See exactly how long STP takes in each state — click a segment to understand Blocking, Listening, Learning, and Forwarding. Compare Classic 802.1D (50s) vs RSTP (<1s) vs PortFast.",
+        "diagramId": "stp_timeline"
+      }
     },
     {
       "id": "w2_detect",
@@ -4950,7 +4955,12 @@
           "xpReward": 10,
           "next": "w4_dhcp_config"
         }
-      ]
+      ],
+      "concept_visual": {
+        "title": "DHCP DORA Flow",
+        "explanation": "Step through all four DHCP messages: Discover, Offer, Request, and Acknowledge. See the exact source/destination IPs and why each is broadcast or unicast.",
+        "diagramId": "dhcp"
+      }
     },
     {
       "id": "w4_dhcp_config",
@@ -5007,7 +5017,12 @@
           "xpReward": 5,
           "next": "w4_dns"
         }
-      ]
+      ],
+      "concept_visual": {
+        "title": "DHCP Relay Agent (ip helper-address)",
+        "explanation": "Switch to Relay mode and see how ip helper-address converts client broadcasts into unicasts, inserts the giaddr field, and routes the exchange to a remote DHCP server.",
+        "diagramId": "dhcp"
+      }
     },
     {
       "id": "w4_dns",
@@ -5026,7 +5041,12 @@
           "xpReward": 15,
           "next": "w4_snmp"
         }
-      ]
+      ],
+      "concept_visual": {
+        "title": "DNS — Recursive vs Iterative Resolution",
+        "explanation": "Walk through the full DNS lookup chain from client to Root NS to TLD to authoritative. Switch between recursive (resolver does the work) and iterative (client follows referrals) modes.",
+        "diagramId": "dns"
+      }
     },
     {
       "id": "w4_snmp",

@@ -48,6 +48,10 @@ export class ReferenceView {
       { id: 'ftp',           title: 'FTP — Active vs Passive'             },
       { id: 'cloud',         title: 'Cloud — IaaS / PaaS / SaaS'         },
       { id: 'topology',      title: 'Multi-Device CLI Simulator'          },
+      { id: 'dhcp',          title: 'DHCP — DORA Flow & Relay Agent'      },
+      { id: 'arp',           title: 'ARP — Resolution, GARP & Cache'      },
+      { id: 'dns',           title: 'DNS — Recursive vs Iterative'        },
+      { id: 'stp_timeline',  title: 'STP — State Timeline & RSTP'         },
     ];
 
     list.innerHTML = SECTIONS.map(s => `
