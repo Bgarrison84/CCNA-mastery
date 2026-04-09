@@ -58,6 +58,8 @@ function makeBlankConfig(hostname = 'Router') {
     routing: {
       rip: null,      // { version: 2, networks: [] }
       ospf: {},       // { processId: { routerId, networks: [] } }
+      eigrp: {},      // { asNumber: { networks: [], autoSummary: true } }
+      ipv6Ospf: {},   // { processId: { routerId } }
       static: [],     // [{ network, mask, nextHop }]
     },
     lines: {
@@ -71,6 +73,7 @@ function makeBlankConfig(hostname = 'Router') {
     dhcpExcluded: [], // [{ start, end }]
     ipRouting: false,   // Layer 3 switch: ip routing
     ipv6Routing: false,
+    tunnels: {},        // { 'Tunnel0': { source, destination, mode } } GRE tunnel params
     spanning_tree: { mode: 'pvst', vlanPriority: {} }, // vlanPriority: { vlanId: priority }
     nat: { insideSources: [], pools: {} }, // insideSources: [{type,aclNum,interface|poolName|insideIp+outsideIp}]
     aaa: { newModel: false, authentication: { login: {} }, authorization: {} },
@@ -90,6 +93,7 @@ function normalizeInterface(name) {
     'f': 'FastEthernet', 'fa': 'FastEthernet', 'fastethernet': 'FastEthernet',
     's': 'Serial', 'se': 'Serial', 'serial': 'Serial',
     'lo': 'Loopback', 'loopback': 'Loopback',
+    'tu': 'Tunnel', 'tunnel': 'Tunnel',
     'e': 'Ethernet', 'ethernet': 'Ethernet',
     'po': 'Port-channel', 'port-channel': 'Port-channel', 'portchannel': 'Port-channel',
     'vlan': 'Vlan',
@@ -302,6 +306,7 @@ export class Terminal {
       if (this._isAbbrev(cmd, 'standby'))       return this._cmdStandby(args, rawArgs);
       if (this._isAbbrev(cmd, 'channel-group')) return this._cmdChannelGroup(args);
       if (this._isAbbrev(cmd, 'spanning-tree')) return this._cmdIfSpanningTree(args);
+      if (this._isAbbrev(cmd, 'tunnel'))        return this._cmdTunnelIf(args, rawArgs);
       if (cmd === 'zone-member' && args[0] === 'security') return this._cmdZoneMember(rawArgs);
       return this._unknownCmd(cmd);
     }
@@ -351,10 +356,21 @@ export class Terminal {
 
     // ── Router Config ───────────────────────────────────────────────────────
     if (mode === MODE.ROUTER_CONFIG) {
-      if (this._isAbbrev(cmd, 'network'))  return this._cmdRoutingNetwork(args);
-      if (this._isAbbrev(cmd, 'version'))  return this._cmdRipVersion(args);
-      if (this._isAbbrev(cmd, 'router-id'))return this._cmdRouterId(args);
-      if (cmd === 'no')                    return this._cmdNo(args, rawArgs, mode);
+      if (this._isAbbrev(cmd, 'network'))        return this._cmdRoutingNetwork(args);
+      if (this._isAbbrev(cmd, 'version'))        return this._cmdRipVersion(args);
+      if (this._isAbbrev(cmd, 'router-id'))      return this._cmdRouterId(args);
+      if (this._isAbbrev(cmd, 'redistribute'))   return { lines: [] }; // accept silently
+      if (this._isAbbrev(cmd, 'passive-interface')) return { lines: [] };
+      if (this._isAbbrev(cmd, 'default-information')) return { lines: [] };
+      if (cmd === 'no') {
+        // no auto-summary (EIGRP)
+        if (args[0] === 'auto-summary') {
+          const as = this._context.routerPid;
+          if (this._config.routing.eigrp[as]) this._config.routing.eigrp[as].autoSummary = false;
+          return { lines: [] };
+        }
+        return this._cmdNo(args, rawArgs, mode);
+      }
       return this._unknownCmd(cmd);
     }
 
@@ -598,6 +614,11 @@ export class Terminal {
       if (!this._config.routing.ospf[pid]) this._config.routing.ospf[pid] = { networks: [] };
       this._context.routerProto = 'ospf';
       this._context.routerPid   = pid;
+    } else if (proto === 'eigrp') {
+      const as = args[1] || '1';
+      if (!this._config.routing.eigrp[as]) this._config.routing.eigrp[as] = { networks: [], autoSummary: true };
+      this._context.routerProto = 'eigrp';
+      this._context.routerPid   = as;
     } else {
       return this._err(`% Unknown routing protocol: ${proto}`);
     }
@@ -612,6 +633,9 @@ export class Terminal {
     } else if (this._context.routerProto === 'ospf') {
       const wildcard = args[1], area = args[3];
       this._config.routing.ospf[this._context.routerPid].networks.push({ net, wildcard, area });
+    } else if (this._context.routerProto === 'eigrp') {
+      const wildcard = args[1] || null;
+      this._config.routing.eigrp[this._context.routerPid].networks.push({ net, wildcard });
     }
     return { lines: [] };
   }
@@ -624,6 +648,9 @@ export class Terminal {
   _cmdRouterId(args) {
     if (this._context.routerProto === 'ospf') {
       this._config.routing.ospf[this._context.routerPid].routerId = args[0];
+    } else if (this._context.routerProto === 'ipv6ospf') {
+      const pid = this._context.routerPid;
+      if (this._config.routing.ipv6Ospf[pid]) this._config.routing.ipv6Ospf[pid].routerId = args[0];
     }
     return { lines: [] };
   }
@@ -751,6 +778,14 @@ export class Terminal {
       this._config.routing.ipv6Static.push({ prefix, nextHop });
       return { lines: [] };
     }
+    if (args[0] === 'router' && args[1] === 'ospf') {
+      // ipv6 router ospf <pid>
+      const pid = args[2] || '1';
+      if (!this._config.routing.ipv6Ospf[pid]) this._config.routing.ipv6Ospf[pid] = { routerId: null };
+      this._context.routerProto = 'ipv6ospf';
+      this._context.routerPid   = pid;
+      return this._setMode(MODE.ROUTER_CONFIG);
+    }
     return this._err('% Unknown ipv6 command.');
   }
 
@@ -765,6 +800,14 @@ export class Terminal {
       return { lines: [] };
     }
     if (args[0] === 'enable') return { lines: [] };
+    if (args[0] === 'ospf') {
+      // ipv6 ospf <pid> area <area>
+      const pid = args[1], area = args[3];
+      if (!pid) return this._err('% Incomplete command. Usage: ipv6 ospf <pid> area <area>');
+      if (!iface.ipv6Ospf) iface.ipv6Ospf = [];
+      iface.ipv6Ospf.push({ pid, area: area || '0' });
+      return { lines: [] };
+    }
     return this._err('% Unknown ipv6 interface subcommand.');
   }
 
@@ -800,6 +843,18 @@ export class Terminal {
       this._config.interfaces[poName] = { ip: null, mask: null, shutdown: false, description: '' };
     }
     return { lines: [] };
+  }
+
+  // ── GRE Tunnel interface subcommands ──────────────────────────────────────
+  _cmdTunnelIf(args, rawArgs) {
+    const ifName = this._context.interface;
+    if (!ifName?.startsWith('Tunnel')) return this._err('% tunnel commands only valid on Tunnel interfaces');
+    if (!this._config.tunnels[ifName]) this._config.tunnels[ifName] = { source: null, destination: null, mode: 'gre ip' };
+    const tun = this._config.tunnels[ifName];
+    if (args[0] === 'source')      { tun.source      = rawArgs[1]; return { lines: [] }; }
+    if (args[0] === 'destination') { tun.destination = rawArgs[1]; return { lines: [] }; }
+    if (args[0] === 'mode' && args[1] === 'gre') { tun.mode = 'gre ip'; return { lines: [] }; }
+    return this._err('% Unknown tunnel subcommand. Use: tunnel source|destination|mode gre ip');
   }
 
   // ── DHCP pool subcommands ─────────────────────────────────────────────────
@@ -1018,6 +1073,19 @@ export class Terminal {
     if (sub === 'ip') {
       if (args[1] === 'route') return { lines: this._renderRoutes() };
       if (args[1] === 'interface') return { lines: this._renderIpInterfaces() };
+      if (args[1] === 'eigrp') {
+        if (args[2] === 'topology') return { lines: this._renderEigrpTopology() };
+        return { lines: this._renderEigrpNeighbors() }; // 'neighbors' or bare
+      }
+      if (args[1] === 'ospf') {
+        return { lines: this._renderOspfNeighbors() };
+      }
+    }
+
+    if (sub === 'ipv6') {
+      if (args[1] === 'route')        return { lines: this._renderIpv6Routes() };
+      if (args[1] === 'ospf')         return { lines: this._renderIpv6OspfNeighbors() };
+      if (args[1] === 'interface')    return { lines: this._renderIpv6Interfaces() };
     }
 
     if (this._isAbbrev(sub, 'vlan')) {
@@ -1335,32 +1403,46 @@ export class Terminal {
         'disable               - Return to User EXEC',
       ],
       [MODE.GLOBAL_CONFIG]: [
-        'hostname <name>       - Set device hostname',
-        'interface <type><n>   - Enter interface config',
-        'ip route <n> <m> <nh> - Add static route',
-        'router rip|ospf       - Enter routing config',
-        'line console 0        - Configure console',
-        'line vty 0 4          - Configure VTY lines',
-        'enable secret <pwd>   - Set enable password',
-        'banner motd # msg #   - Set MOTD banner',
-        'access-list ...       - Define numbered ACL',
-        'ip access-list ext NAME - Enter named ACL config mode',
-        'vlan <id>             - Create VLAN',
-        'no <cmd>              - Negate / remove command',
-        'end / exit            - Exit config mode',
+        'hostname <name>           - Set device hostname',
+        'interface <type><n>       - Enter interface config (supports Tunnel<n>)',
+        'ip route <n> <m> <nh>     - Add static route',
+        'router rip|ospf|eigrp <n> - Enter routing protocol config',
+        'ipv6 router ospf <pid>    - Enter OSPFv3 (IPv6 OSPF) config',
+        'ipv6 unicast-routing      - Enable IPv6 routing',
+        'line console 0            - Configure console',
+        'line vty 0 4              - Configure VTY lines',
+        'enable secret <pwd>       - Set enable password',
+        'banner motd # msg #       - Set MOTD banner',
+        'access-list ...           - Define numbered ACL',
+        'ip access-list ext NAME   - Enter named ACL config mode',
+        'vlan <id>                 - Create VLAN',
+        'no <cmd>                  - Negate / remove command',
+        'end / exit                - Exit config mode',
+      ],
+      [MODE.ROUTER_CONFIG]: [
+        'network <net> [<wildcard>] [area <n>]  - Advertise network (OSPF/EIGRP)',
+        'router-id <x.x.x.x>                   - Set router ID (OSPF/OSPFv3)',
+        'no auto-summary                        - Disable auto-summary (EIGRP)',
+        'version <n>                            - Set RIP version',
+        'exit                                   - Return to Global Config',
       ],
       [MODE.INTERFACE_CONFIG]: [
-        'ip address <ip> <mask>  - Assign IP address',
-        'description <text>      - Set description',
-        'no shutdown             - Enable interface',
-        'shutdown                - Disable interface',
-        'duplex [auto|full|half] - Set duplex',
-        'speed [10|100|1000]     - Set speed',
+        'ip address <ip> <mask>          - Assign IP address',
+        'ipv6 address <prefix/len>       - Assign IPv6 address',
+        'ipv6 ospf <pid> area <area>     - Assign interface to OSPFv3 process',
+        'tunnel source <ip|iface>        - Set GRE tunnel source (Tunnel interfaces)',
+        'tunnel destination <ip>         - Set GRE tunnel destination',
+        'tunnel mode gre ip              - Set tunnel encapsulation (GRE over IPv4)',
+        'description <text>              - Set description',
+        'no shutdown                     - Enable interface',
+        'shutdown                        - Disable interface',
+        'duplex [auto|full|half]         - Set duplex',
+        'speed [10|100|1000]             - Set speed',
         'switchport port-security          - Enable port security',
         'switchport port-security maximum N - Set max MACs',
         'switchport port-security mac-address sticky',
         'switchport port-security violation {protect|restrict|shutdown}',
-        'exit / end              - Return to Global Config',
+        'exit / end                      - Return to Global Config',
       ],
       [MODE.ACL_CONFIG]: [
         'permit <protocol> <src> <dst>  - Add permit entry',
@@ -1462,6 +1544,7 @@ export class Terminal {
       if (iface.zoneMember)   out.push({ text: ` zone-member security ${iface.zoneMember}`, cls: 'text-white' });
       if (iface.acl) out.push({ text: ` ip access-group ${iface.acl.name} ${iface.acl.direction}`, cls: 'text-white' });
       if (iface.ipv6) iface.ipv6.forEach(a => out.push({ text: ` ipv6 address ${a}`, cls: 'text-white' }));
+      (iface.ipv6Ospf || []).forEach(o => out.push({ text: ` ipv6 ospf ${o.pid} area ${o.area}`, cls: 'text-white' }));
       if (iface.channelGroup) out.push({ text: ` channel-group ${iface.channelGroup.id} mode ${iface.channelGroup.mode}`, cls: 'text-white' });
       if (iface.spanningTreePortfast) out.push({ text: ' spanning-tree portfast', cls: 'text-white' });
       if (iface.hsrp) {
@@ -1471,6 +1554,13 @@ export class Terminal {
           if (h.priority) out.push({ text: ` standby${g} priority ${h.priority}`, cls: 'text-white' });
           if (h.preempt)  out.push({ text: ` standby${g} preempt`, cls: 'text-white' });
         }
+      }
+      // GRE tunnel params (only for Tunnel interfaces)
+      if (name.startsWith('Tunnel') && c.tunnels?.[name]) {
+        const tun = c.tunnels[name];
+        if (tun.source)      out.push({ text: ` tunnel source ${tun.source}`, cls: 'text-white' });
+        if (tun.destination) out.push({ text: ` tunnel destination ${tun.destination}`, cls: 'text-white' });
+        if (tun.mode)        out.push({ text: ` tunnel mode ${tun.mode}`, cls: 'text-white' });
       }
       out.push({ text: iface.shutdown ? ' shutdown' : ' no shutdown', cls: 'text-white' });
       out.push({ text: '!', cls: 'text-gray-500' });
@@ -1487,6 +1577,19 @@ export class Terminal {
       out.push({ text: `router ospf ${pid}`, cls: 'text-cyan-300' });
       if (ospf.routerId) out.push({ text: ` router-id ${ospf.routerId}`, cls: 'text-white' });
       ospf.networks.forEach(n => out.push({ text: ` network ${n.net} ${n.wildcard} area ${n.area}`, cls: 'text-white' }));
+      out.push({ text: '!', cls: 'text-gray-500' });
+    }
+
+    for (const [as, eigrp] of Object.entries(c.routing.eigrp || {})) {
+      out.push({ text: `router eigrp ${as}`, cls: 'text-cyan-300' });
+      eigrp.networks.forEach(n => out.push({ text: ` network ${n.net}${n.wildcard ? ' ' + n.wildcard : ''}`, cls: 'text-white' }));
+      if (!eigrp.autoSummary) out.push({ text: ' no auto-summary', cls: 'text-white' });
+      out.push({ text: '!', cls: 'text-gray-500' });
+    }
+
+    for (const [pid, ipv6ospf] of Object.entries(c.routing.ipv6Ospf || {})) {
+      out.push({ text: `ipv6 router ospf ${pid}`, cls: 'text-cyan-300' });
+      if (ipv6ospf.routerId) out.push({ text: ` router-id ${ipv6ospf.routerId}`, cls: 'text-white' });
       out.push({ text: '!', cls: 'text-gray-500' });
     }
 
@@ -1597,12 +1700,13 @@ export class Terminal {
   }
 
   _renderRoutes() {
-    const out = [{ text: 'Codes: C - connected, S - static, R - RIP, O - OSPF', cls: 'text-gray-400' }, { text: '', cls: '' }];
+    const out = [{ text: 'Codes: C - connected, S - static, R - RIP, O - OSPF, D - EIGRP', cls: 'text-gray-400' }, { text: '', cls: '' }];
     const cfg = this._config;
 
     for (const [name, iface] of Object.entries(cfg.interfaces)) {
-      if (iface.ip) {
-        out.push({ text: `C    ${iface.ip}/? is directly connected, ${name}`, cls: 'text-green-300' });
+      if (iface.ip && iface.mask) {
+        const prefix = this._maskToPrefix(iface.mask);
+        out.push({ text: `C    ${iface.ip}/${prefix} is directly connected, ${name}`, cls: 'text-green-300' });
       }
     }
     cfg.routing.static.forEach(r =>
@@ -1611,7 +1715,12 @@ export class Terminal {
       cfg.routing.rip.networks.forEach(n =>
         out.push({ text: `R    ${n}.0.0.0/8 [120/1] via (RIP)`, cls: 'text-cyan-300' }));
     }
-    if (!out.length) out.push({ text: '% No routes found.', cls: 'text-gray-400' });
+    for (const [as, eigrp] of Object.entries(cfg.routing.eigrp || {})) {
+      (eigrp.networks || []).forEach(n => {
+        out.push({ text: `D    ${n.net}${n.wildcard ? ' [90/2170112]' : ''} via (EIGRP AS ${as})`, cls: 'text-yellow-300' });
+      });
+    }
+    if (out.length <= 2) out.push({ text: '% No routes found.', cls: 'text-gray-400' });
     return out;
   }
 
@@ -1643,6 +1752,96 @@ export class Terminal {
         out.push({ text: `    ${(i + 1) * 10} ${entry}`, cls: 'text-white' });
       });
     }
+    return out;
+  }
+
+  _renderEigrpNeighbors() {
+    const out = [{ text: 'EIGRP neighbors (protocol is eigrp)', cls: 'text-green-300' }];
+    const eigrpEntries = Object.entries(this._config.routing.eigrp || {});
+    if (!eigrpEntries.length) {
+      out.push({ text: 'No EIGRP process configured.', cls: 'text-gray-400' });
+      return out;
+    }
+    out.push({ text: 'H   Address         Interface       Hold  Uptime   SRTT  RTO  Q  Seq', cls: 'text-gray-400' });
+    eigrpEntries.forEach(([as]) => {
+      out.push({ text: `    (EIGRP AS ${as} — simulated; no live neighbors)`, cls: 'text-yellow-400' });
+    });
+    return out;
+  }
+
+  _renderEigrpTopology() {
+    const out = [{ text: 'IP-EIGRP Topology Table for AS(1)/ID(0.0.0.0)', cls: 'text-green-300' }];
+    const eigrpEntries = Object.entries(this._config.routing.eigrp || {});
+    if (!eigrpEntries.length) {
+      out.push({ text: 'No EIGRP process configured.', cls: 'text-gray-400' });
+      return out;
+    }
+    out.push({ text: 'Codes: P - Passive, A - Active, U - Update, Q - Query', cls: 'text-gray-400' });
+    for (const [as, data] of eigrpEntries) {
+      out.push({ text: `! EIGRP AS ${as}`, cls: 'text-gray-500' });
+      (data.networks || []).forEach(n => {
+        const net = n.wildcard ? `${n.net}/${n.wildcard}` : n.net;
+        out.push({ text: `P ${net}, 1 successors, FD is 28160`, cls: 'text-white' });
+      });
+    }
+    if (!eigrpEntries.some(([, d]) => d.networks?.length)) {
+      out.push({ text: '  (no networks advertised)', cls: 'text-gray-400' });
+    }
+    return out;
+  }
+
+  _renderOspfNeighbors() {
+    const out = [{ text: 'Neighbor ID     Pri   State   Dead Time  Address    Interface', cls: 'text-green-300' }];
+    const ospfEntries = Object.entries(this._config.routing.ospf || {});
+    if (!ospfEntries.length) {
+      out.push({ text: 'No OSPF process configured.', cls: 'text-gray-400' });
+      return out;
+    }
+    ospfEntries.forEach(([pid]) => {
+      out.push({ text: `  (OSPF process ${pid} — simulated; no live neighbors)`, cls: 'text-yellow-400' });
+    });
+    return out;
+  }
+
+  _renderIpv6Routes() {
+    const out = [{ text: 'IPv6 Routing Table — default — 0 entries', cls: 'text-gray-400' },
+      { text: 'Codes: C - Connected, L - Local, S - Static, O - OSPFv3', cls: 'text-gray-400' }, { text: '', cls: '' }];
+    const cfg = this._config;
+    for (const [name, iface] of Object.entries(cfg.interfaces)) {
+      (iface.ipv6 || []).forEach(addr => {
+        out.push({ text: `C   ${addr} [0/0] via ${name}, directly connected`, cls: 'text-green-300' });
+      });
+    }
+    (cfg.routing?.ipv6Static || []).forEach(r => {
+      out.push({ text: `S   ${r.prefix} [1/0] via ${r.nextHop}`, cls: 'text-white' });
+    });
+    if (out.length === 3) out.push({ text: '  No IPv6 routes found.', cls: 'text-gray-400' });
+    return out;
+  }
+
+  _renderIpv6OspfNeighbors() {
+    const out = [{ text: 'OSPFv3 1 address-family ipv6 (router-id 0.0.0.0)', cls: 'text-green-300' },
+      { text: 'Neighbor ID     Pri   State       Dead Time  Interface ID  Interface', cls: 'text-gray-400' }];
+    const ipv6OspfEntries = Object.entries(this._config.routing.ipv6Ospf || {});
+    if (!ipv6OspfEntries.length) {
+      out.push({ text: 'No OSPFv3 process configured.', cls: 'text-gray-400' });
+      return out;
+    }
+    ipv6OspfEntries.forEach(([pid, data]) => {
+      out.push({ text: `  OSPFv3 process ${pid}${data.routerId ? ' router-id ' + data.routerId : ''} — simulated`, cls: 'text-yellow-400' });
+    });
+    return out;
+  }
+
+  _renderIpv6Interfaces() {
+    const out = [];
+    for (const [name, iface] of Object.entries(this._config.interfaces)) {
+      if (!(iface.ipv6?.length)) continue;
+      const state = iface.shutdown ? 'down' : 'up';
+      out.push({ text: `${name} [${state}/${state}]`, cls: 'text-green-300' });
+      iface.ipv6.forEach(a => out.push({ text: `  IPv6 address: ${a}`, cls: 'text-white' }));
+    }
+    if (!out.length) out.push({ text: 'No IPv6 interfaces configured.', cls: 'text-gray-400' });
     return out;
   }
 
@@ -1824,6 +2023,48 @@ export class Terminal {
           an.net === tn.net && an.wildcard === tn.wildcard && String(an.area) === String(tn.area));
         if (!found) missing.push(`ospf ${pid}: network ${tn.net} ${tn.wildcard} area ${tn.area} missing`);
       }
+    }
+
+    // EIGRP
+    for (const [as, targetEigrp] of Object.entries(targetConfig.routing?.eigrp || {})) {
+      const actualEigrp = current.routing.eigrp?.[as];
+      if (!actualEigrp) { missing.push(`router eigrp ${as} not configured`); continue; }
+      for (const tn of (targetEigrp.networks || [])) {
+        const found = actualEigrp.networks.find(an => an.net === tn.net);
+        if (!found) missing.push(`eigrp ${as}: network ${tn.net} missing`);
+      }
+      if (targetEigrp.autoSummary === false && actualEigrp.autoSummary !== false)
+        missing.push(`eigrp ${as}: no auto-summary not configured`);
+    }
+
+    // IPv6 OSPF (OSPFv3)
+    for (const [pid, targetIpv6Ospf] of Object.entries(targetConfig.routing?.ipv6Ospf || {})) {
+      const actualIpv6Ospf = current.routing.ipv6Ospf?.[pid];
+      if (!actualIpv6Ospf) { missing.push(`ipv6 router ospf ${pid} not configured`); continue; }
+      if (targetIpv6Ospf.routerId && actualIpv6Ospf.routerId !== targetIpv6Ospf.routerId)
+        missing.push(`ipv6 ospf ${pid}: router-id should be ${targetIpv6Ospf.routerId}`);
+    }
+
+    // Interface IPv6 OSPF assignments
+    for (const [ifName, target] of Object.entries(targetConfig.interfaces || {})) {
+      const actual = current.interfaces[ifName];
+      if (!actual) continue; // already reported above
+      for (const to of (target.ipv6Ospf || [])) {
+        const found = (actual.ipv6Ospf || []).find(ao => String(ao.pid) === String(to.pid) && String(ao.area) === String(to.area));
+        if (!found) missing.push(`${ifName}: ipv6 ospf ${to.pid} area ${to.area} missing`);
+      }
+    }
+
+    // GRE Tunnels
+    for (const [tunName, targetTun] of Object.entries(targetConfig.tunnels || {})) {
+      const actualTun = current.tunnels?.[tunName];
+      if (!actualTun) { missing.push(`interface ${tunName} tunnel not configured`); continue; }
+      if (targetTun.source && actualTun.source !== targetTun.source)
+        missing.push(`${tunName}: tunnel source should be ${targetTun.source}`);
+      if (targetTun.destination && actualTun.destination !== targetTun.destination)
+        missing.push(`${tunName}: tunnel destination should be ${targetTun.destination}`);
+      if (targetTun.mode && actualTun.mode !== targetTun.mode)
+        missing.push(`${tunName}: tunnel mode should be ${targetTun.mode}`);
     }
 
     // VLANs
@@ -2039,6 +2280,24 @@ export class Terminal {
       n++; // process existence
       if (ospf.routerId) n++;
       n += (ospf.networks?.length || 0);
+    }
+    for (const eigrp of Object.values(target.routing?.eigrp || {})) {
+      n++; // process existence
+      n += (eigrp.networks?.length || 0);
+      if (eigrp.autoSummary === false) n++;
+    }
+    for (const ipv6ospf of Object.values(target.routing?.ipv6Ospf || {})) {
+      n++; // process existence
+      if (ipv6ospf.routerId) n++;
+    }
+    for (const [, iface] of Object.entries(target.interfaces || {})) {
+      n += (iface.ipv6Ospf?.length || 0);
+    }
+    for (const tun of Object.values(target.tunnels || {})) {
+      n++; // existence
+      if (tun.source) n++;
+      if (tun.destination) n++;
+      if (tun.mode) n++;
     }
     for (const acl of Object.values(target.acls || {})) {
       n++; // acl existence

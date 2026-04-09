@@ -8,7 +8,7 @@
  * Bump CACHE_VERSION to force a fresh install after deploying updates.
  */
 
-const CACHE_VERSION = 'ccna-v18';
+const CACHE_VERSION = 'ccna-v19';
 const CACHE_NAME    = `ccna-mastery-${CACHE_VERSION}`;
 
 // All assets to pre-cache on install
