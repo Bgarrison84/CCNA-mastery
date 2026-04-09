@@ -47,6 +47,7 @@ export class ReferenceView {
       { id: 'aaa',           title: 'AAA — TACACS+ / RADIUS / 802.1X'    },
       { id: 'ftp',           title: 'FTP — Active vs Passive'             },
       { id: 'cloud',         title: 'Cloud — IaaS / PaaS / SaaS'         },
+      { id: 'topology',      title: 'Multi-Device CLI Simulator'          },
     ];
 
     list.innerHTML = SECTIONS.map(s => `

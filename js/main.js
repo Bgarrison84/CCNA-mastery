@@ -43,6 +43,7 @@ const DIAGRAM_MODULES = {
   routing:    './js/diagrams/routing.js',
   subnetting:    './js/diagrams/subnetting.js',
   encapsulation: './js/diagrams/encapsulation.js',
+  topology:      './js/diagrams/topology.js',
 };
 
 window.renderDiagram = async function(id, container) {

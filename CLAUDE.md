@@ -15,3 +15,7 @@ Source: GEMINI.md backlog. Work through in order, one per session.
 ### Infrastructure
 7. [x] **Tailwind Post-Compilation** *(done 2026-04-09)* — Deleted 398K runtime `tailwind.js`; `app.css` (37K compiled) already linked. Run `npm run build:css` after class changes.
 8. [x] **Vitest Unit Testing** *(done 2026-04-09)* — 72 tests passing: 28 for `Subnetting.js` (solveSubnet, validateIPv4, VLSM, IPv6, buildChallenge) and 44 for `Store.js` (XP/levelling, SRS, mistakes, flags, inventory). Run `npm test`.
+
+### High-Fidelity Sims (2026-04-09)
+9. [x] **Infinite Subnetting Speed Drill** — Upgraded `SubnetView.js` with Calculator + Speed Drill tabs. Drill mode: timed, difficulty-selectable (Easy/Medium/Hard/Speed Run), per-field feedback, streak tracking, +25 XP per problem, +100 XP Speed Run bonus. Persists stats to localStorage.
+10. [x] **Multi-Device CLI Topology** — New `js/diagrams/topology.js`: simulated 4-device topology (PC1 → R1 → R2 → Server). Commands: `ping`, `traceroute`, `telnet`, `ssh`, `show arp`, `show ip interface brief`, `show ip route`, `show running-config`, `show version`. Device context switching via `telnet`/`exit`. Click topology icons to jump between devices. Added to Reference view and DIAGRAM_MODULES.
