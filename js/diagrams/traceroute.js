@@ -449,7 +449,7 @@ export function render(containerEl) {
 
   function resetVisuals(resetPacket = true) {
     clearTimeout(stepTimer);
-    animating = false;
+    if (resetPacket) animating = false;   // don't clear the flag mid-run
 
     if (resetPacket) {
       showPacket(false);

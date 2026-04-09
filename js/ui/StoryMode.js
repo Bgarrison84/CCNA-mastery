@@ -42,6 +42,13 @@ export class StoryMode {
     this.showCurrentBeat();
   }
 
+  /** Called by Router when navigating away — prevent timer/event leaks. */
+  destroy() {
+    clearTimeout(this._typingTimer);
+    this._charWidget?.destroy();
+    this._charWidget = null;
+  }
+
   _renderCharacter() {
     const el = this.containerEl.querySelector('#char-road');
     if (!el) return;
